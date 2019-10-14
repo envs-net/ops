@@ -1,0 +1,4 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+0-59/1	* * * * root /usr/local/bin/conntrack.sh && /usr/local/bin/envs_conntracks.sh >/dev/null 2>&1

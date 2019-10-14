@@ -1,0 +1,11 @@
+[Unit]
+Description=ZNC IRC bouncer
+After=network-online.target
+
+[Service]
+ExecStart=/usr/bin/znc -f --datadir=/srv/znc/.znc
+ExecReload=/bin/kill -HUP $MAINPID
+User=znc
+
+[Install]
+WantedBy=multi-user.target

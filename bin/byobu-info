@@ -1,0 +1,15 @@
+#!/usr/bin/env sh
+
+/usr/local/bin/motd
+
+/usr/bin/figlet -f smslant welcome!
+
+printf "you're in a byobu session\n"
+printf "if you're familiar with tmux, continue as normal, but with ctrl-a instead of ctrl-b\n"
+printf "if you don't want to this happen by default when you log in, run byobu-disable.\n"
+printf 'press shift-f1 for a full list of keybinds\n'
+printf 'man byobu for more info\n\n'
+printf 'f2 creates a new tab\n'
+printf 'f3 and f4 move you between tabs\n'
+printf 'f6 disconnects and leaves everything running\n'
+printf 'shift-f12 disable/enable byobu f-key bindings\n'

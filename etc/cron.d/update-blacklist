@@ -1,0 +1,4 @@
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+33 23 * * *  root  /usr/local/sbin/update-blacklist.sh /etc/ipset-blacklist/ipset-blacklist.conf >/dev/null 2>/dev/null&

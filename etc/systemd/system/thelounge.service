@@ -1,0 +1,16 @@
+[Unit]
+Description=The Lounge IRC client
+After=network-online.target
+
+[Service]
+Type=simple
+Environment="THELOUNGE_HOME=/srv/thelounge/"
+ExecStart=/srv/thelounge/.yarn/bin/thelounge start
+User=thelounge
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,3 @@
+location = /favicon.ico {
+    alias /var/www/envs.net/favicon.ico;
+}

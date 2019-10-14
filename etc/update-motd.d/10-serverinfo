@@ -1,0 +1,21 @@
+#!/bin/bash
+
+[ -r /etc/lsb-release ] && . /etc/lsb-release
+
+if [ -z "$DISTRIB_DESCRIPTION" ] && [ -x /usr/bin/lsb_release ]; then
+        # Fall back to using the very slow lsb_release utility
+        DISTRIB_DESCRIPTION=$(lsb_release -s -d)
+fi
+
+printf 'System information from %s\n\n' "$(date +'%A, %d.%m.%Y - %H:%M:%S %Z')"
+printf "   %s (%s %s %s)\n" "$DISTRIB_DESCRIPTION" "$(uname -o)" "$(uname -r)" "$(uname -m)"
+printf '   Uptime:\t%s\n' "$(/usr/bin/uptime -p)"
+awk '{printf "   load:\t%s %s %s\n", $1, $2, $3}' /proc/loadavg
+sed -n '/^MemTotal\|^MemFree/{s#\(.*\):[ ]\+\([0-9]\+\)[ ]*\(.*\)#   \1\:\t\2\ \3#p}' /proc/meminfo
+printf '   disk space:\tused %s | free %s\n' "$(df -h / | tail -1 | awk '{print $3}')" "$(df -h / | tail -1 | awk '{print $4}')"
+printf '   processes:\t%s\n' "$(ps ax | wc -l | tr -d " ")"
+
+zombies="$(ps axo pid=,stat= | awk '$2~/^Z/ { print }' | wc -l)"
+if [ "$zombies" -gt 0 ]; then
+	printf '\n   => There are %s zombie processes.\n' "$zombies"
+fi

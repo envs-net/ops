@@ -1,0 +1,7 @@
+#
+# BACKUP Server every day
+#
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/root
+
+13 1,13 * * * root /root/backup-server.sh >/dev/null 2>&1

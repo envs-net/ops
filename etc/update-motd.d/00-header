@@ -1,0 +1,5 @@
+#!/bin/bash
+export TERM=xterm-256color
+
+printf '%sWelcome to%s\n' "$(tput setaf 5)" "$(tput sgr0)"
+printf '%s%s%s\n' "$(tput setaf 6)" "$(/usr/bin/figlet -f smslant envs.net)" "$(tput sgr0)"

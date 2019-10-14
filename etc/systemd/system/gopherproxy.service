@@ -1,0 +1,16 @@
+[Unit]
+Description=gopherproxy.service
+After=network-online.target nginx.service
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/services/go/src/github.com/envs-net/gopherproxy/
+ExecStart=/opt/services/go/src/github.com/envs-net/gopherproxy/gopherproxy -bind 127.0.0.1:8993 -uri envs.net
+User=services
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target

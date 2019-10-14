@@ -1,0 +1,52 @@
+
+<User NEWUSER>
+        Admin = false
+        Allow = *
+        AltNick = NEWUSER
+        AppendTimestamp = false
+        AutoClearChanBuffer = true
+        AutoClearQueryBuffer = true
+        Buffer = 50
+        ClientEncoding = ^UTF-8
+        DenyLoadMod = false
+        DenySetBindHost = false
+        Ident = NEWUSER
+        JoinTries = 0
+        MaxJoins = 0
+        MaxNetworks = 10
+        MaxQueryBuffers = 0
+        MultiClients = true
+        Nick = NEWUSER
+        PrependTimestamp = false
+        QuitMsg = %znc%
+        RealName = NEWUSER
+        TimestampFormat = [%H:%M:%S]
+
+        <Network tilde>
+                Encoding = ^UTF-8
+                FloodBurst = 9
+                FloodRate = 2.00
+                IRCConnectEnabled = false
+                JoinDelay = 0
+                LoadModule = alias
+                LoadModule = modules_online
+                LoadModule = simple_away
+                LoadModule = keepnick
+                LoadModule = nickserv
+                LoadModule = stickychan
+                LoadModule = chansaver
+                Server = irc.tilde.chat +6697
+                TrustAllCerts = false
+                TrustPKI = true
+
+                <Chan #envs>
+                </Chan>
+
+        </Network>
+
+        <Pass password>
+                Method = sha256
+                Hash = 154ffc62fefce6d5153b633e9b906cf0a77bb36604d8097ca93e5c17e1bfc99a
+                Salt = lNnqMyf42-Ec3ilKnJSS
+        </Pass>
+</User>

@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+
+domain='envs.net'
+short_dom="$(echo $domain | awk -F. '{printf $1}')"
+
+
+cmd="$1"
+user="$2"
+mailTo="$3"
+ssh_pubkey="$4"
+
+newpw=$(pwgen -s 12 1)
+pwcrypt=$(perl -e "print crypt('${newpw}', 'sa');")
+
+# mail header
+head_mime='MIME-Version: 1.0'
+head_type='Content-type: text/plain; charset=utf-8'
+head_def="$head_mime\r\n$head_type"
+
+###
+
+add_user_db() {
+	mysql -u root << EOF
+CREATE DATABASE $user;
+GRANT ALL PRIVILEGES ON $USER.* TO '$user'@'localhost' IDENTIFIED BY '$newpw';
+FLUSH PRIVILEGES;
+EOF
+}
+
+del_user_db() {
+	mysqldump -u root "$user" > /tmp/"$user".sql
+	mv /tmp/"$user".sql /root/mysql_dumps/"$user".sql
+
+	mysql -u root << EOF
+DROP DATABASE $user;
+FLUSH PRIVILEGES;
+EOF
+}
+
+
+add_user() {
+	useradd -m -g 9999 -s /bin/bash -p "$pwcrypt" "$user"
+
+	# set user quota
+	echo "$user	hard	nproc	200" | tee /etc/security/limits.d/"$user" >/dev/null 2>&1
+	setquota -u "$user" 1024M 1536M 0 0 /
+
+	# set mail aliases
+	echo "$user: $user@$domain" | tee -a /etc/aliases >/dev/null 2>&1
+	echo "$user: $user@$domain" | tee -a /etc/email-addresses >/dev/null 2>&1
+
+	# systemd service
+	chown -R "$user":"$short_dom" /home/"$user"/.config/systemd/user/
+
+	# set users ssh pub key
+	if [ -n "$ssh_pubkey" ]; then
+		echo "$ssh_pubkey" | tee /home/"$user"/.ssh/authorized_keys
+	else
+		nano /home/"$user"/.ssh/authorized_keys
+	fi
+	chmod 700 /home/"$user"/.ssh/
+	chmod 644 /home/"$user"/.ssh/authorized_keys
+	chown -R "$user":"$short_dom" /home/"$user"/.ssh
+
+	# setup database
+	add_user_db
+
+	# setup email mailbox
+	lxc-attach -n mail -- bash -c "/usr/local/bin/coreapi action accounts create \
+		-p username=$user@$domain -p role=SimpleUsers -p language=en \
+		-p password=$newpw -p secondary_email=$mailTo >/dev/null 2>&1 "
+
+	sleep 3
+
+	# send readme mail
+	readme_sub="Subject: Welcome ~$user | please readme!"
+	readme_mail="$head_def\r\nTo: $user@$domain\r\nFrom: sudoers@$domain\r\n$readme_sub"
+
+	echo -e "$readme_mail\r\n$(cat /usr/local/bin/welcome-readme.tmpl)" | sendmail "$user"@"$domain"
+
+	# send welcome mail
+	wel_sub="Subject: Welcome to $domain | ~$user"
+	wel_mail="$head_def\r\nTo: $mailTo\r\nCC: $user@$domain\r\nFrom: hosting@$domain\r\n$wel_sub"
+
+	sleep 1 && echo -e "$wel_mail\r\n$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /usr/local/bin/welcome-email.tmpl)" \
+		| sendmail "$user"@"$domain" "$mailTo"
+
+	# subscribing to mailing list
+	sleep 1 && echo -e "$head_def\r\nTo: team-join@$domain\r\nFrom: $user@$domain\r\nSubject: subscribe\r\n" \
+		| sudo -u "$user" sendmail team-join@"$domain"
+
+	# setup mutt
+	echo -e "$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /home/"$user"/.muttrc)" > /home/"$user"/.muttrc
+	chmod go-r /home/"$user"/.muttrc
+	printf '\n~%s\n' "$user" > /home/"$user"/.mutt/signature
+
+	# setup znc account
+	sudo -u znc pkill -SIGUSR1 znc && pkill znc
+	sudo -u znc /srv/znc/add_znc_user.sh "$user"
+	systemctl start znc
+
+	# setup weechat
+	sed -i s/_username_/"$user"/g /home/"$user"/.weechat/irc.conf
+
+	# cleanup /etc/skel/ git stuff from user home
+	rm -rf /home/"$user"/.git /home/"$user"/README.md
+
+	# envs user update (userlist, recently updates and users_info.json)
+	/usr/local/bin/envs_user_updated.sh
+
+	# announcing new user on mastodon
+	sudo -u services toot post "welcome new user ~$user"
+}
+
+
+del_user() {
+	# unsubscribe mailing list
+	# ??
+	echo -e "$head_def\r\nTo: team-leave@$domain\r\nFrom: $user@$domain\r\nSubject: leave\r\n" | sudo -u "$user" sendmail team-leave@"$domain"
+	# remove user
+	deluser --remove-home "$user"
+	# unset user quota
+	rm /etc/security/limits.d/"$user"
+	# unset mail aliases
+	sed -i /"$user"/d /etc/aliases
+	sed -i /"$user"/d /etc/email-addresses
+	# remove email mailbox
+	# get userid from lxc-attach
+	mail_userid=$(lxc-attach -n mail -- bash -c "/usr/local/bin/coreapi action accounts list -p search=$user@$domain | jq '.[] | .pk'")
+	lxc-attach -n mail -- bash -c "/usr/local/bin/coreapi action accounts delete -p id=$mail_userid"
+	# remove database
+	del_user_db
+	# unlink gemini
+	[[ -L /var/gemini/\~"$user" ]] && unlink /var/gemini/\~"$user"
+	# remove znc account
+	printf '\n!!! ADMIN: please remove %s also from lists.%s and znc.%s !!!\n\n' "$user" "$domain" "$domain"
+}
+
+
+[[ "$EUID" -ne 0 ]] && printf 'Please run as root!\n' && exit 1
+
+case "$cmd" in
+  add)	[[ $# -lt 3 ]] && printf 'not enough args\n' && exit 1
+		if ! id -u "$user" >/dev/null 2>&1; then
+			printf '\nAdd User %s to %s\n' "$user" "$domain"
+			printf 'mail to: %s\n\n' "$mailTo"
+			add_user
+		else
+			printf 'User already exists!\n'
+		fi
+  ;;
+
+  del)	[[ $# -lt 2 ]] && printf 'not enough args\n' && exit 1
+		if id -u "$user" >/dev/null 2>&1; then
+			printf '\nDelete User %s from %s?\n' "$user" "$domain"
+			select yn in "Yes" "No"; do
+			case $yn in
+				Yes	) del_user ; break ;;
+				No  ) break ;;
+			esac ; done
+		else
+			printf 'User not exists!\n'
+		fi
+  ;;
+
+  *)	printf '%s | User Account Setup\n\n' "$domain"
+		printf 'Usage: %s\n  Add a User:\n' "$(basename "$0")"
+		printf '\t%s add "username" "email" "ssh-pubkey"\n' "$(basename "$0")"
+		printf '  Delete a User:\n'
+		printf '\t%s del "username"\n' "$(basename "$0")"
+  ;;
+esac
+
+#
+exit 0

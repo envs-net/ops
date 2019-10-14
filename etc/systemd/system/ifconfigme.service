@@ -1,0 +1,14 @@
+[Unit]
+Description=ifconfig.me
+After=network-online.target
+
+[Service]
+Type=simple
+Restart=always
+RestartSec=5s
+WorkingDirectory=/srv/ifconfig/
+ExecStart=/srv/ifconfig/ifconfig
+User=services
+
+[Install]
+WantedBy=multi-user.target

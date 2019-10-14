@@ -1,0 +1,7 @@
+#
+# generate sysinfo.json and sysinfo.php every day
+#
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+0 0 * * * root /usr/local/bin/envs_sysinfo.sh >/dev/null 2>&1

@@ -1,0 +1,398 @@
+#!/usr/bin/env bash
+### BEGIN INIT INFO
+# Provides:          S41firewall
+# Required-Start:    network.target
+# Required-Stop:
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: set basic firewall
+# Description:       set basic firewall
+### END INIT INFO
+
+# TODO
+# - do more secure and optimize
+# - change to nftables
+#
+
+DEF_IF='enp2s0'
+IPT='/usr/sbin/iptables'
+
+# Logging options.
+#------------------------------------------------------------------------------
+LOG="LOG --log-level debug --log-tcp-sequence --log-tcp-options"
+LOG="$LOG --log-ip-options"
+
+# Defaults for rate limiting
+#------------------------------------------------------------------------------
+RLIMIT="-m limit --limit 3/s --limit-burst 30"
+
+
+if [ "$1" = "start" ]; then
+
+	# Default policies.
+	#------------------------------------------------------------------------------
+
+	# Drop everything by default.
+	$IPT -P INPUT DROP
+	$IPT -P FORWARD DROP
+	$IPT -P OUTPUT ACCEPT
+
+	# Set the nat/mangle/raw tables' chains to ACCEPT
+	$IPT -w -t nat -P PREROUTING ACCEPT
+	$IPT -w -t nat -P OUTPUT ACCEPT
+	$IPT -w -t nat -P POSTROUTING ACCEPT
+
+	$IPT -w -t mangle -P PREROUTING ACCEPT
+	$IPT -w -t mangle -P INPUT ACCEPT
+	$IPT -w -t mangle -P FORWARD ACCEPT
+	$IPT -w -t mangle -P OUTPUT ACCEPT
+	$IPT -w -t mangle -P POSTROUTING ACCEPT
+
+	# Cleanup.
+	#------------------------------------------------------------------------------
+
+	# Delete all
+	$IPT -F
+	$IPT -t nat -F
+	$IPT -t mangle -F
+
+	# Delete all
+	$IPT -X
+	$IPT -t nat -X
+	$IPT -t mangle -X
+
+	# Zero all packets and counters.
+	$IPT -Z
+	$IPT -t nat -Z
+	$IPT -t mangle -Z
+
+	# Custom user-defined chains.
+	#------------------------------------------------------------------------------
+
+	# LOG packets, then ACCEPT.
+	$IPT -w -N ACCEPTLOG
+	$IPT -w -A ACCEPTLOG -j "$LOG" "$RLIMIT" --log-prefix "ACCEPT "
+	$IPT -w -A ACCEPTLOG -j ACCEPT
+
+	# LOG packets, then DROP.
+	$IPT -w -N DROPLOG
+	$IPT -w -A DROPLOG -j "$LOG" "$RLIMIT" --log-prefix "DROP "
+	$IPT -w -A DROPLOG -j DROP
+
+	# LOG packets, then REJECT.
+	# TCP packets are rejected with a TCP reset.
+	$IPT -w -N REJECTLOG
+	$IPT -w -A REJECTLOG -j "$LOG" "$RLIMIT" --log-prefix "REJECT "
+	$IPT -w -A REJECTLOG -p tcp -j REJECT --reject-with tcp-reset
+	$IPT -w -A REJECTLOG -j REJECT
+
+	# Only allows RELATED ICMP types
+	# (destination-unreachable, time-exceeded, and parameter-problem).
+	# TODO: Rate-limit this traffic?
+	# TODO: Allow fragmentation-needed?
+	# TODO: Test.
+	$IPT -w -N RELATED_ICMP
+	$IPT -w -A RELATED_ICMP -p icmp --icmp-type destination-unreachable -j ACCEPT
+	$IPT -w -A RELATED_ICMP -p icmp --icmp-type time-exceeded -j ACCEPT
+	$IPT -w -A RELATED_ICMP -p icmp --icmp-type parameter-problem -j ACCEPT
+	$IPT -w -A RELATED_ICMP -p icmp --icmp-type fragmentation-needed -j ACCEPT
+	#$IPT -w -A RELATED_ICMP -p icmp --icmp-type source-quench -j ACCEPT
+	$IPT -w -A RELATED_ICMP -j DROPLOG
+
+	# Make It Even Harder To Multi-PING
+	$IPT -w -A INPUT -p icmp -m limit --limit 1/s --limit-burst 2 -j ACCEPT
+	$IPT -w -A OUTPUT -p icmp -j ACCEPT
+
+	# Only allow the minimally required/recommended parts of ICMP. Block the rest.
+	#------------------------------------------------------------------------------
+
+	# Allow all ESTABLISHED ICMP traffic.
+	$IPT -w -A INPUT -p icmp -m state --state ESTABLISHED -j ACCEPT "$RLIMIT"
+	$IPT -w -A OUTPUT -p icmp -m state --state ESTABLISHED -j ACCEPT "$RLIMIT"
+
+	# Allow some parts of the RELATED ICMP traffic, block the rest.
+	$IPT -w -A INPUT -p icmp -m state --state RELATED -j RELATED_ICMP "$RLIMIT"
+	$IPT -w -A OUTPUT -p icmp -m state --state RELATED -j RELATED_ICMP "$RLIMIT"
+
+	# Allow incoming ICMP echo requests (ping), but only rate-limited.
+	$IPT -w -A INPUT -p icmp --icmp-type echo-request -j ACCEPT "$RLIMIT"
+
+	# Allow outgoing ICMP echo requests (ping), but only rate-limited.
+	$IPT -w -A OUTPUT -p icmp --icmp-type echo-request -j ACCEPT "$RLIMIT"
+
+	# Drop any other ICMP traffic.
+	$IPT -w -A INPUT -p icmp -j DROPLOG
+	$IPT -w -A OUTPUT -p icmp -j DROPLOG
+	$IPT -w -A FORWARD -p icmp -j DROPLOG
+
+	# Selectively allow certain special types of traffic.
+	#------------------------------------------------------------------------------
+
+	# Allow loopback interface to do anything.
+	$IPT -w -A INPUT -i lo -j ACCEPT
+	$IPT -w -A OUTPUT -o lo -j ACCEPT
+
+	# Allow incoming connections related to existing allowed connections.
+	$IPT -w -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+	# Allow outgoing connections EXCEPT invalid
+	$IPT -w -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+	# FORWARD RULES
+	#------------------------------------------------------------------------------
+
+	$IPT -w -t mangle -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS  --clamp-mss-to-pmtu
+
+	#
+	# ENVS.NET - 89.163.145.170 (default wan_ip)
+	#
+	# lxcbr0 - 192.168.1.0/24
+	$IPT -w -t nat -A POSTROUTING -d 192.168.1.0/24 -s 192.168.1.1 -j SNAT --to 192.168.1.1
+
+	# dns
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p udp --dport 53 -j DNAT --to-destination 192.168.1.2:53
+	$IPT -w -A FORWARD -p udp -d 192.168.1.2 --dport 53 -j ACCEPT
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 53 -j DNAT --to-destination 192.168.1.2:53
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.2 --dport 53 -j ACCEPT
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.2 -j SNAT --to 89.163.145.170
+
+	#
+	# MAIL ()
+	# => apache2 proxy (http/https)
+	# SMTP
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 25 -j DNAT --to-destination 192.168.1.3:25
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 25 -j DNAT --to-destination 192.168.1.3:25
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 25 -j ACCEPT
+	# SMTPs
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 587 -j DNAT --to-destination 192.168.1.3:587
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 587 -j DNAT --to-destination 192.168.1.3:587
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 587 -j ACCEPT
+	# Sieve
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 4190 -j DNAT --to-destination 192.168.1.3:4190
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 4190 -j DNAT --to-destination 192.168.1.3:4190
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 4190 -j ACCEPT
+	# IMAP
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 143 -j DNAT --to-destination 192.168.1.3:143
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 143 -j DNAT --to-destination 192.168.1.3:143
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 143 -j ACCEPT
+	# IMAPs
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 993 -j DNAT --to-destination 192.168.1.3:993
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 993 -j DNAT --to-destination 192.168.1.3:993
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 993 -j ACCEPT
+	# POP
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 110 -j DNAT --to-destination 192.168.1.3:110
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 110 -j DNAT --to-destination 192.168.1.3:110
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 110 -j ACCEPT
+	# POPs
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 995 -j DNAT --to-destination 192.168.1.3:995
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 995 -j DNAT --to-destination 192.168.1.3:995
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 995 -j ACCEPT
+	#
+	$IPT -w -t nat -A POSTROUTING -d 192.168.1.4 -s 192.168.1.3 -j SNAT --to 192.168.1.3
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.3 -j SNAT --to 5.199.136.28
+
+	# mail-lists
+	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.4 -j SNAT --to 5.199.136.29
+
+	# gitea
+	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.130.141 -p tcp --dport 22 -j DNAT --to-destination 192.168.1.10:22
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.10 --dport 22 -j ACCEPT
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.10 -j SNAT --to 5.199.130.141
+
+	# searx
+	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.11 -j SNAT --to 89.163.145.170
+
+	# cryptpad
+	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.12 -j SNAT --to 89.163.145.170
+
+	# 0x0
+	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 9999 -j DNAT --to-destination 192.168.1.15:9999
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.15 --dport 9999 -j ACCEPT
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.15 -j SNAT --to 89.163.145.170
+
+	# rss
+	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.16 -j SNAT --to 89.163.145.170
+
+	# pb
+	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.17 -j SNAT --to 89.163.145.170
+
+
+	# MASQUERADE.
+	#------------------------------------------------------------------------------
+
+	#dont SNAT locally generated packets target for local
+	$IPT -w -t nat -A POSTROUTING -o lo -j ACCEPT
+
+	# snat all lxc traffic to freifunk network
+	# this allows to access the freifunk network from other lxc container
+	# all container must setup a routing entry to lxc.vpn1
+	#iptables -t nat -A POSTROUTING -o tbb+ -s 192.168.1.0/24 -j SNAT --to-source 10.200.1.1
+	#iptables -I FORWARD -i "$DEF_IF" -o tbb+ -j ACCEPT
+
+	# wen using lxc, masq all traffic which goes via "$DEF_IF" (like DNS,vpn)
+	# iptables -t nat -o "$DEF_IF" -A POSTROUTING -j MASQUERADE
+
+	# Selectively allow certain outbound connections, block the rest.
+	#------------------------------------------------------------------------------
+
+	# dns
+	$IPT -w -A OUTPUT -m state --state NEW -p udp --dport 53 -j ACCEPT
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 53 -j ACCEPT
+
+	# openvpn
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 1194 -j ACCEPT
+	$IPT -w -A OUTPUT -m state --state NEW -p udp --dport 1194 -j ACCEPT
+
+	# http
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 80 -j ACCEPT
+
+	# https
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 443 -j ACCEPT
+
+	# smtp
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 25 -j ACCEPT
+
+	# smtps
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 465 -j ACCEPT
+
+	# syslog
+	$IPT -w -A OUTPUT -m state --state NEW -p udp --dport 514 -j ACCEPT
+
+	# "submission" (RFC 2476)
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 587 -j ACCEPT
+
+	# pop3s
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 995 -j ACCEPT
+
+	# ssh
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 22 -j ACCEPT
+
+	# ftp
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 21 -j ACCEPT
+
+	# ntp
+	$IPT -w -A OUTPUT -m state --state NEW -p udp --dport 123 -j ACCEPT
+
+	# whois
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 43 -j ACCEPT
+
+	# csv
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 2401 -j ACCEPT
+
+	# mysql
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 3306 -j ACCEPT
+
+	# svn
+	$IPT -w -A OUTPUT -m state --state NEW -p tcp --dport 3690 -j ACCEPT
+
+
+
+	# Selectively allow certain inbound connections, block the rest.
+	#------------------------------------------------------------------------------
+
+	# dns
+	$IPT -w -A INPUT -m state --state NEW -p udp --dport 53 -j ACCEPT
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 53 -j ACCEPT
+
+	# finger
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 79 -j ACCEPT
+
+	# ident
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 113 -j ACCEPT
+
+	# gopher
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 70 -j ACCEPT
+
+	# http/https
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 80 -j ACCEPT
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 443 -j ACCEPT
+
+	# gemini
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 1965 -j ACCEPT
+
+	# ssh
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 22 -j ACCEPT
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 2222 -j ACCEPT
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 2223 -j ACCEPT
+
+	# mosh
+	$IPT -w -A INPUT -m state --state NEW -p udp --dport 60001:61000 -j ACCEPT
+
+	# znc
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 6667 -j ACCEPT
+	$IPT -w -A INPUT -m state --state NEW -p tcp --dport 6697 -j ACCEPT
+
+
+	# Miscellaneous.
+	#------------------------------------------------------------------------------
+
+	# Explicitly drop invalid incoming traffic
+	$IPT -w -A INPUT -m state --state INVALID -j DROP
+
+	# Drop invalid outgoing traffic, too.
+	$IPT -w -A OUTPUT -m state --state INVALID -j DROP
+
+	# If we would use NAT, INVALID packets would pass - BLOCK them anyways
+	$IPT -w -A FORWARD -m state --state INVALID -j DROP
+
+	# Explicitly log and reject everything else.
+	#------------------------------------------------------------------------------
+
+	# Enable blacklists
+	ipset restore < /etc/ipset-blacklist/ip-blacklist.restore
+	ipset restore < /etc/ipset-fail2ban/ipset-fail2ban.restore
+
+	$IPT -I INPUT 1 -m set --match-set blacklist_default src -j DROP
+	$IPT -I INPUT 2 -m set --match-set blacklist_fail2ban src -j DROP
+
+	$IPT -I FORWARD 1 -m set --match-set blacklist_default src -j DROP
+	$IPT -I FORWARD 2 -m set --match-set blacklist_fail2ban src -j DROP
+
+
+	# Use REJECT instead of REJECTLOG if you don't need/want logging.
+	$IPT -w -A INPUT -j REJECT
+	$IPT -w -A FORWARD -j REJECT
+	$IPT -w -A OUTPUT -j ACCEPT
+fi
+
+if [ "$1" = "stop" ]; then
+
+	$IPT -t mangle -F PREROUTING
+	$IPT -t mangle -F OUTPUT
+	$IPT -t nat -F PREROUTING
+	$IPT -t nat -F POSTROUTING
+	$IPT -t nat -F OUTPUT
+	$IPT -F INPUT
+	$IPT -F FORWARD
+	$IPT -F OUTPUT
+
+fi
+
+if [ "$1" = "restart" ]; then
+
+	$0 stop
+	sleep 1
+	$0 start
+fi
+
+if [ "$1" = "status" ]; then
+
+	echo "iptables -vnL ..."
+	$IPT -vnL --line-numbers
+	echo "iptables -vnL -t nat ..."
+	$IPT -vnL -t nat --line-numbers
+	echo "iptables -vnL -t mangle ..."
+	$IPT -vnL -t mangle --line-numbers
+fi
+
+# Exit gracefully.
+#------------------------------------------------------------------------------
+
+	exit 0

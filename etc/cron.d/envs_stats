@@ -1,0 +1,7 @@
+#
+# generate envs stats.html (once per hour)
+#
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+0 * * * * root /usr/local/bin/envs_stats.sh >/dev/null 2>&1
