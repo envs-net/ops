@@ -76,13 +76,13 @@ add_user() {
 	readme_sub="Subject: Welcome ~$user | please readme!"
 	readme_mail="$head_def\r\nTo: $user@$domain\r\nFrom: sudoers@$domain\r\n$readme_sub"
 
-	echo -e "$readme_mail\r\n$(cat /usr/local/bin/welcome-readme.tmpl)" | sendmail "$user"@"$domain"
+	echo -e "$readme_mail\r\n$(cat /usr/local/bin/envs/welcome-readme.tmpl)" | sendmail "$user"@"$domain"
 
 	# send welcome mail
 	wel_sub="Subject: Welcome to $domain | ~$user"
 	wel_mail="$head_def\r\nTo: $mailTo\r\nCC: $user@$domain\r\nFrom: hosting@$domain\r\n$wel_sub"
 
-	sleep 1 && echo -e "$wel_mail\r\n$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /usr/local/bin/welcome-email.tmpl)" \
+	sleep 1 && echo -e "$wel_mail\r\n$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /usr/local/bin/envs/welcome-email.tmpl)" \
 		| sendmail "$user"@"$domain" "$mailTo"
 
 	# subscribing to mailing list
@@ -106,7 +106,7 @@ add_user() {
 	rm -rf /home/"$user"/.git /home/"$user"/README.md
 
 	# envs user update (userlist, recently updates and users_info.json)
-	/usr/local/bin/envs_user_updated.sh
+	/usr/local/bin/envs/envs_user_updated.sh
 
 	# announcing new user on mastodon
 	sudo -u services toot post "welcome new user ~$user"

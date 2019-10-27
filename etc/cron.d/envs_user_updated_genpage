@@ -5,4 +5,4 @@
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-0 * * * * root /usr/local/bin/envs_user_updated.sh >/dev/null 2>&1
+0 * * * * root /usr/local/bin/envs/envs_user_updated.sh >/dev/null 2>&1
