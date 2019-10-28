@@ -175,7 +175,7 @@ cat<<EOM > "$TMP_JSON"
 		},
 		"packages": {
 			"av98":         "$(/usr/local/bin/av98 --version | awk '{print $2}')",
-			"bombadillo":   "$(/usr/local/bin/bombadillo -v | sed 's/Bombadillo v//')",
+			"bombadillo":   "$(/usr/local/bin/bombadillo -v | awk '{print $2}' | sed 's/v//')",
 			"burrow":       "$(/usr/local/bin/burrow -v | sed 's/v//')",
 			"clinte":       "$(/usr/local/bin/clinte -V | awk '{print $2}')",
 			"gfu":          "$(/usr/local/bin/gfu -v | sed '/version/s/.*version \([^ ][^ ]*\)[ ]*.*/\1/')",
