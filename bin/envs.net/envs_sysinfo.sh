@@ -60,6 +60,7 @@ custom_pkg_desc() {
 		pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
 		twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
 		vf1)         pkg_desc='VF-1 - Command line gopher client. High speed, low drag.';;
+		vlang)       pkg_desc='Simple, fast, safe, compiled programming language';;
 		zola)        pkg_desc='single-binary static site generator written in rust';;
 	esac
 }
