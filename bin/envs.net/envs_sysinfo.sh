@@ -29,7 +29,7 @@ readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre elixir erlang flex
 		g++ gcc gcl gdc gforth ghc go golang guile-2.2 inform lua5.1 lua5.2 lua5.3 mono-complete
-		nasm nodejs octave perl php picolisp ponyc python python2.7 python3 racket ruby rustc scala tcl yasm)
+		nasm nodejs octave perl php picolisp ponyc python python2.7 python3 racket ruby rustc scala tcl yasm vlang)
 readarray -t sorted_coding_pkg < <(printf '%s\n' "${coding_pkg[@]}" | sort)
 
 
@@ -184,6 +184,7 @@ cat<<EOM > "$TMP_JSON"
 			"pb":           "$(/usr/local/bin/pb -v)",
 			"twtxt":        "$(/usr/local/bin/twtxt --version | awk '{printf $3}')",
 			"vf1":          "$(/usr/local/bin/vf1 --version | awk '{print $2}')",
+			"vlang":        "$(/usr/local/bin/v --version | sed 's/V //')",
 			"zola":         "$(/usr/local/bin/zola -V | awk '{print $2}')",
 $(print_pkg_version)
 EOM
