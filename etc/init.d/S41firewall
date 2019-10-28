@@ -150,9 +150,9 @@ if [ "$1" = "start" ]; then
 	$IPT -w -t nat -A POSTROUTING -d 192.168.1.0/24 -s 192.168.1.1 -j SNAT --to 192.168.1.1
 
 	# dns
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p udp --dport 53 -j DNAT --to-destination 192.168.1.2:53
+	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p udp --dport 53 -j DNAT --to-destination 192.168.1.2:53
 	$IPT -w -A FORWARD -p udp -d 192.168.1.2 --dport 53 -j ACCEPT
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 53 -j DNAT --to-destination 192.168.1.2:53
+	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 53 -j DNAT --to-destination 192.168.1.2:53
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.2 --dport 53 -j ACCEPT
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.2 -j SNAT --to 89.163.145.170
 
@@ -160,32 +160,25 @@ if [ "$1" = "start" ]; then
 	# MAIL ()
 	# => apache2 proxy (http/https)
 	# SMTP
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 25 -j DNAT --to-destination 192.168.1.3:25
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 25 -j DNAT --to-destination 192.168.1.3:25
+	$IPT -w -t nat -A PREROUTING -d 5.199.136.28 -p tcp --dport 25 -j DNAT --to-destination 192.168.1.3:25
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 25 -j ACCEPT
 	# SMTPs
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 587 -j DNAT --to-destination 192.168.1.3:587
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 587 -j DNAT --to-destination 192.168.1.3:587
+	$IPT -w -t nat -A PREROUTING -d 5.199.136.28 -p tcp --dport 587 -j DNAT --to-destination 192.168.1.3:587
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 587 -j ACCEPT
 	# Sieve
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 4190 -j DNAT --to-destination 192.168.1.3:4190
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 4190 -j DNAT --to-destination 192.168.1.3:4190
+	$IPT -w -t nat -A PREROUTING -d 5.199.136.28 -p tcp --dport 4190 -j DNAT --to-destination 192.168.1.3:4190
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 4190 -j ACCEPT
 	# IMAP
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 143 -j DNAT --to-destination 192.168.1.3:143
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 143 -j DNAT --to-destination 192.168.1.3:143
+	$IPT -w -t nat -A PREROUTING -d 5.199.136.28 -p tcp --dport 143 -j DNAT --to-destination 192.168.1.3:143
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 143 -j ACCEPT
 	# IMAPs
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 993 -j DNAT --to-destination 192.168.1.3:993
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 993 -j DNAT --to-destination 192.168.1.3:993
+	$IPT -w -t nat -A PREROUTING -d 5.199.136.28 -p tcp --dport 993 -j DNAT --to-destination 192.168.1.3:993
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 993 -j ACCEPT
 	# POP
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 110 -j DNAT --to-destination 192.168.1.3:110
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 110 -j DNAT --to-destination 192.168.1.3:110
+	$IPT -w -t nat -A PREROUTING -d 5.199.136.28 -p tcp --dport 110 -j DNAT --to-destination 192.168.1.3:110
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 110 -j ACCEPT
 	# POPs
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.136.28 -p tcp --dport 995 -j DNAT --to-destination 192.168.1.3:995
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 995 -j DNAT --to-destination 192.168.1.3:995
+	$IPT -w -t nat -A PREROUTING -d 5.199.136.28 -p tcp --dport 995 -j DNAT --to-destination 192.168.1.3:995
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.3 --dport 995 -j ACCEPT
 	#
 	$IPT -w -t nat -A POSTROUTING -d 192.168.1.4 -s 192.168.1.3 -j SNAT --to 192.168.1.3
@@ -197,7 +190,7 @@ if [ "$1" = "start" ]; then
 
 	# gitea
 	# => apache2 proxy (http/https)
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 5.199.130.141 -p tcp --dport 22 -j DNAT --to-destination 192.168.1.10:22
+	$IPT -w -t nat -A PREROUTING -d 5.199.130.141 -p tcp --dport 22 -j DNAT --to-destination 192.168.1.10:22
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.10 --dport 22 -j ACCEPT
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.10 -j SNAT --to 5.199.130.141
 
@@ -211,7 +204,7 @@ if [ "$1" = "start" ]; then
 
 	# 0x0
 	# => apache2 proxy (http/https)
-	$IPT -w -t nat -A PREROUTING -i "$DEF_IF" -d 89.163.145.170 -p tcp --dport 9999 -j DNAT --to-destination 192.168.1.15:9999
+	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 9999 -j DNAT --to-destination 192.168.1.15:9999
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.15 --dport 9999 -j ACCEPT
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.15 -j SNAT --to 89.163.145.170
 
@@ -346,15 +339,7 @@ if [ "$1" = "start" ]; then
 	#------------------------------------------------------------------------------
 
 	# Enable blacklists
-	ipset restore < /etc/ipset-blacklist/ip-blacklist.restore
-	ipset restore < /etc/ipset-fail2ban/ipset-fail2ban.restore
-
-	$IPT -I INPUT 1 -m set --match-set blacklist_default src -j DROP
-	$IPT -I INPUT 2 -m set --match-set blacklist_fail2ban src -j DROP
-
-	$IPT -I FORWARD 1 -m set --match-set blacklist_default src -j DROP
-	$IPT -I FORWARD 2 -m set --match-set blacklist_fail2ban src -j DROP
-
+	# see /etc/rc.local
 
 	# Use REJECT instead of REJECTLOG if you don't need/want logging.
 	$IPT -w -A INPUT -j REJECT
