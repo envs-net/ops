@@ -31,7 +31,7 @@ cat << EOM > "$TMP_JSON"
 	"data": {
 		"info": {
 			"name":         "envs",
-			"description":  "envs.net is a minimalist, non-commercial shared unix system and will always be free to use.",
+			"description":  "envs.net is a minimalist, non-commercial shared linux system and will always be free to use.",
 			"located":      "germany",
 			"maintainer":   "Sven Kinne (~creme) - creme@envs.net",
 			"website":      "https://$DOMAIN",

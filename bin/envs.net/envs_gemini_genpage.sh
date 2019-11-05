@@ -30,7 +30,7 @@ $(figlet -f smslant envs.net)
 
 
 envs.net is a minimalist, non-commercial
-shared unix system and will always be free to use.
+shared linux system and will always be free to use.
 
 we are linux lovers, sysadmins, programmer and users who like build
 webpages, write blogs, chat online, play cool console games and so much
