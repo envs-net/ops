@@ -23,7 +23,7 @@ editors=(emacs micro nano neovim vim)
 readarray -t sorted_editors < <(printf '%s\n' "${editors[@]}" | sort)
 
 
-inet_clients=(alpine av98 bombadillo curl irssi lynx neomutt mutt mosh openssh-client pb toot weechat wget vf1)
+inet_clients=(alpine av98 bombadillo curl irssi lynx neomutt meli mutt mosh openssh-client pb toot weechat wget vf1)
 readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 
@@ -56,6 +56,7 @@ custom_pkg_desc() {
 		gfu)         pkg_desc='A utility for formatting gophermaps';;
 		go)          pkg_desc='tool for managing Go source code';;
 		goaccess)    pkg_desc='fast web log analyzer and interactive viewer';;
+		meli)        pkg_desc='terminal mail user agent';;
 		micro)       pkg_desc='a new modern terminal-based text editor';;
 		pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
 		twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
@@ -181,6 +182,7 @@ cat<<EOM > "$TMP_JSON"
 			"gfu":          "$(/usr/local/bin/gfu -v | sed '/version/s/.*version \([^ ][^ ]*\)[ ]*.*/\1/')",
 			"go":           "$(sed 's/go//' /usr/local/go/VERSION)",
 			"goaccess":     "$(/usr/bin/goaccess -V | head -1 | sed -e 's/GoAccess - //' -e '$ s/.$//')",
+			"meli":         "$(/usr/local/bin/meli --version | awk '{printf $2}')",
 			"micro":        "$(/usr/local/bin/micro -version | head -n1 | awk '{print $2}')",
 			"pb":           "$(/usr/local/bin/pb -v)",
 			"twtxt":        "$(/usr/local/bin/twtxt --version | awk '{printf $3}')",
