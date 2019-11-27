@@ -39,7 +39,7 @@ readarray -t sorted_coding_tools < <(printf '%s\n' "${coding_tools[@]}" | sort)
 
 
 misc=(aria2 bc busybox burrow byobu clinte gfu goaccess hugo jekyll mariadb-client mathomatic mathtex mkdocs
-	pandoc pelican screen sqlite3 tmux todotxt-cli twtxt zola)
+	pandoc pelican screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 
 ###
@@ -60,6 +60,7 @@ custom_pkg_desc() {
 		micro)       pkg_desc='a new modern terminal-based text editor';;
 		pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
 		twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
+		txtnish)     pkg_desc='A twtxt client with minimal dependencies';;
 		vf1)         pkg_desc='VF-1 - Command line gopher client. High speed, low drag.';;
 		vlang)       pkg_desc='Simple, fast, safe, compiled programming language';;
 		zola)        pkg_desc='single-binary static site generator written in rust';;
@@ -186,6 +187,7 @@ cat<<EOM > "$TMP_JSON"
 			"micro":        "$(/usr/local/bin/micro -version | head -n1 | awk '{print $2}')",
 			"pb":           "$(/usr/local/bin/pb -v)",
 			"twtxt":        "$(/usr/local/bin/twtxt --version | awk '{printf $3}')",
+			"txtnish":      "$(/usr/local/bin/txtnish -V)",
 			"vf1":          "$(/usr/local/bin/vf1 --version | awk '{print $2}')",
 			"vlang":        "$(/usr/local/bin/v --version | sed 's/V //')",
 			"zola":         "$(/usr/local/bin/zola -V | awk '{print $2}')",
