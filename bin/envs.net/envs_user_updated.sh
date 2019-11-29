@@ -183,15 +183,15 @@ EOM
 EOM
 							else
 								# continue user def. array
-								if ! [[ "$field_count" -eq '0' ]]; then
-									cat << EOM >> "$TMP_JSON"
+								cat << EOM >> "$TMP_JSON"
 					"${line_to_set[$field]}",
 EOM
-								# end of user def. array
-								else
+								if [[ "$field_count" -eq '0' ]]; then
+									# end of user def. array
+									# remove trailing ',' on last user entry
 									unset field_in_progress
+									sed -i '$ s/,$//' "$TMP_JSON"
 									cat << EOM >> "$TMP_JSON"
-					"${line_to_set[$field]}"
 				],
 EOM
 								fi
