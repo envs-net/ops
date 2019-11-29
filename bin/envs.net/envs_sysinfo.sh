@@ -38,7 +38,7 @@ coding_tools=(ack bison build-essential clisp cl-launch cvs devscripts ecl gawk 
 readarray -t sorted_coding_tools < <(printf '%s\n' "${coding_tools[@]}" | sort)
 
 
-misc=(aria2 bc busybox burrow byobu clinte gfu goaccess hugo jekyll mariadb-client mathomatic mathtex mkdocs
+misc=(aria2 bc busybox burrow byobu clinte gfu goaccess hugo jekyll mariadb-client mandoc mathomatic mathtex mkdocs
 	pandoc pelican screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 
