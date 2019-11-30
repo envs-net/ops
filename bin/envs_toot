@@ -3,7 +3,7 @@
 printf 'toot as envs.net\n\n'
 
 if [ -n "$1" ] && [ -z "$2" ]; then
-	sudo -u services /usr/bin/toot post "$1"
+	sudo -u services /usr/bin/toot post "$(id -un) | $1"
 else
 	printf 'usage: envs_toot "your message"\n'
 fi
