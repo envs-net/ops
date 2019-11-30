@@ -1,11 +1,19 @@
 #!/usr/bin/env sh
 
-printf 'toot as envs.net\n\n'
+print_usage() {
+	printf 'usage: envs_toot "your message"\n\n'
+	printf 'sample output:\nusername | your message\n'
+	exit 1
+}
 
-if [ -n "$1" ] && [ -z "$2" ]; then
+printf 'mastodon-toot as envs.net\n\n'
+
+if [ "$1" = '-h' ] || [ "$1" = '--help' ] || [ "$1" = '?' ]; then
+	print_usage
+elif [ -n "$1" ] && [ -z "$2" ]; then
 	sudo -u services /usr/bin/toot post "$(id -un) | $1"
 else
-	printf 'usage: envs_toot "your message"\n'
+	print_usage
 fi
 
 exit 0
