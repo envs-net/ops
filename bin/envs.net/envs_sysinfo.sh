@@ -48,8 +48,8 @@ custom_pkg_desc() {
 	local pkg="$1"
 	case "$pkg" in
 		# packages
-		av98)        pkg_desc='AV-98 - Command line gemini client. High speed, low drag.';;
-		bombadillo)  pkg_desc='Bombadillo is a modern Gopher & Gemini client for the terminal';;
+		av98)        pkg_desc='AV-98 - Command line gemini client. High speed, low drag';;
+		bombadillo)  pkg_desc='Bombadillo is a non-web browser for the terminal';;
 		burrow)      pkg_desc='a helper for building and managing a gopher hole';;
 		clinte)      pkg_desc='a community notices system';;
 		crystal)     pkg_desc='Compiler for the Crystal language';;
