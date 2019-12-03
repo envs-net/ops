@@ -48,7 +48,7 @@ custom_pkg_desc() {
 	local pkg="$1"
 	case "$pkg" in
 		# packages
-		av98)        pkg_desc='AV-98 - Command line gemini client. High speed, low drag';;
+		av98)        pkg_desc='Command line gemini client. High speed, low drag';;
 		bombadillo)  pkg_desc='Bombadillo is a non-web browser for the terminal';;
 		burrow)      pkg_desc='a helper for building and managing a gopher hole';;
 		clinte)      pkg_desc='a community notices system';;
@@ -61,7 +61,7 @@ custom_pkg_desc() {
 		pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
 		twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
 		txtnish)     pkg_desc='A twtxt client with minimal dependencies';;
-		vf1)         pkg_desc='VF-1 - Command line gopher client. High speed, low drag.';;
+		vf1)         pkg_desc='Command line gopher client. High speed, low drag.';;
 		vlang)       pkg_desc='Simple, fast, safe, compiled programming language';;
 		zola)        pkg_desc='single-binary static site generator written in rust';;
 	esac
@@ -218,7 +218,7 @@ print_pkg_info() {
 
 	local pkg_desc
 	custom_pkg_desc "$pkg"
-	[[ "$pkg_desc" = '' ]] && pkg_desc="$(apt-cache show "$pkg" | awk '/Description-en/ {print substr($0, index($0,$3))}' | head -1)"
+	[[ "$pkg_desc" = '' ]] && pkg_desc="$(apt-cache show "$pkg" | awk '/Description-en/ {print substr($0, index($0,$2))}' | head -1)"
 	[[ "$pkg_desc" = '' ]] && pkg_desc="$(apt-cache search ^"$pkg"$ | awk '{print substr($0, index($0,$3))}')"
 	[[ "$pkg_desc" = '' ]] && pkg_desc='n.a.'
 	# remove description-en string
