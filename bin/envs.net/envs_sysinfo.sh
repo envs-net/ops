@@ -115,7 +115,7 @@ cat<<EOM > "$TMP_JSON"
 				"url":         "https://envs.sh/"
 			},
 			"bbj": {
-				"desc":        "Bulletin Butter & Jelly: An HTTP bulletin board server for small communities",
+				"desc":        "bulletin butter & jelly: an http bulletin board server for small communities",
 				"version":     "-",
 				"url":         "https://bbj.envs.net/"
 			},
