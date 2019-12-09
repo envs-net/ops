@@ -29,11 +29,11 @@ readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre elixir erlang flex
 		g++ gcc gcl gdc gforth ghc go golang guile-2.2 inform lua5.1 lua5.2 lua5.3 mono-complete
-		nasm nodejs octave perl php picolisp ponyc python python2.7 python3 racket ruby rustc scala tcl yasm vlang)
+		nasm nim nodejs octave perl php picolisp ponyc python python2.7 python3 racket ruby rustc scala tcl yasm vlang)
 readarray -t sorted_coding_pkg < <(printf '%s\n' "${coding_pkg[@]}" | sort)
 
 
-coding_tools=(ack bison build-essential clisp cl-launch cvs devscripts ecl gawk git gron initscripts jq latex-mk latexmk
+coding_tools=(ack bison build-essential cl-launch cvs devscripts ecl gawk git gron initscripts jq latex-mk latexmk
 		make mawk mercurial rake ripgrep sbcl shellcheck subversion texlive-full virtualenv yarn)
 readarray -t sorted_coding_tools < <(printf '%s\n' "${coding_tools[@]}" | sort)
 
