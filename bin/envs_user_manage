@@ -95,9 +95,9 @@ add_user() {
 	printf '\n~%s\n' "$user" > /home/"$user"/.mutt/signature
 
 	# setup znc account
-	pkill -SIGUSR1 znc && pkill znc
+	sudo -u znc pkill -SIGUSR1 znc && pkill znc
 	sudo -u znc /srv/znc/add_znc_user.sh "$user"
-	systemctl start znc
+	systemctl start znc.service
 
 	# setup weechat
 	sed -i s/_username_/"$user"/g /home/"$user"/.weechat/irc.conf
