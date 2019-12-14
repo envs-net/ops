@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 [[ "$EUID" -ne "$(id -u znc)" ]] && printf 'Please run as znc!\n' && exit 1
 
