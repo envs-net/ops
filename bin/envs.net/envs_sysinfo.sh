@@ -186,7 +186,7 @@ cat<<EOM > "$TMP_JSON"
 			"goaccess":     "$(/usr/bin/goaccess -V | awk '/GoAccess/ {print $3}')",
 			"meli":         "$(/usr/local/bin/meli --version | awk '/meli/ {printf $2}')",
 			"micro":        "$(/usr/local/bin/micro -version | awk '/Version/ {print $2}')",
-			"nimble"        "$(/usr/local/nimble/bin/nim -v | awk '/Version/ {print $4}')",
+			"nimble":       "$(/usr/local/nimble/bin/nim -v | awk '/Version/ {print $4}')",
 			"pb":           "$(/usr/local/bin/pb -v)",
 			"twtxt":        "$(/usr/local/bin/twtxt --version | awk '/version/ {printf $3}')",
 			"txtnish":      "$(/usr/local/bin/txtnish -V)",
