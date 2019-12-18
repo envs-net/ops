@@ -29,7 +29,7 @@ readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre elixir erlang flex
 		g++ gcc gcl gdc gforth ghc go golang guile-2.2 inform lua5.1 lua5.2 lua5.3 mono-complete
-		nasm nim nimble nodejs octave perl php picolisp ponyc python python2.7 python3 racket ruby rustc scala tcl yasm vlang)
+		nasm nim nodejs octave perl php picolisp ponyc python python2.7 python3 racket ruby rustc scala tcl yasm vlang)
 readarray -t sorted_coding_pkg < <(printf '%s\n' "${coding_pkg[@]}" | sort)
 
 
@@ -58,7 +58,6 @@ custom_pkg_desc() {
 		goaccess)    pkg_desc='fast web log analyzer and interactive viewer';;
 		meli)        pkg_desc='terminal mail user agent';;
 		micro)       pkg_desc='a new modern terminal-based text editor';;
-		nimble)      pkg_desc='lastest version of nim programming language - compiler';;
 		pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
 		twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
 		txtnish)     pkg_desc='A twtxt client with minimal dependencies';;
@@ -186,7 +185,6 @@ cat<<EOM > "$TMP_JSON"
 			"goaccess":     "$(/usr/bin/goaccess -V | awk '/GoAccess/ {print $3}')",
 			"meli":         "$(/usr/local/bin/meli --version | awk '/meli/ {printf $2}')",
 			"micro":        "$(/usr/local/bin/micro -version | awk '/Version/ {print $2}')",
-			"nimble":       "$(/usr/local/nimble/bin/nim -v | awk '/Version/ {print $4}')",
 			"pb":           "$(/usr/local/bin/pb -v)",
 			"twtxt":        "$(/usr/local/bin/twtxt --version | awk '/version/ {printf $3}')",
 			"txtnish":      "$(/usr/local/bin/txtnish -V)",
