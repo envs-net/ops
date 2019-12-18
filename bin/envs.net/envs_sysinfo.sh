@@ -6,7 +6,7 @@
 WWW_PATH='/var/www/envs.net'
 DOMAIN='envs.net'
 
-[[ "$EUID" -ne 0 ]] && printf 'Please run as root!\n' && exit 1
+[ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
 ###
 
@@ -29,7 +29,7 @@ readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre elixir erlang flex
 		g++ gcc gcl gdc gforth ghc go golang guile-2.2 inform lua5.1 lua5.2 lua5.3 mono-complete
-		nasm nim nodejs octave perl php picolisp ponyc python python2.7 python3 racket ruby rustc scala tcl yasm vlang)
+		nasm nim nimble nodejs octave perl php picolisp ponyc python python2.7 python3 racket ruby rustc scala tcl yasm vlang)
 readarray -t sorted_coding_pkg < <(printf '%s\n' "${coding_pkg[@]}" | sort)
 
 
@@ -58,6 +58,7 @@ custom_pkg_desc() {
 		goaccess)    pkg_desc='fast web log analyzer and interactive viewer';;
 		meli)        pkg_desc='terminal mail user agent';;
 		micro)       pkg_desc='a new modern terminal-based text editor';;
+		nimble)      pkg_desc='lastest version of nim programming language - compiler';;
 		pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
 		twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
 		txtnish)     pkg_desc='A twtxt client with minimal dependencies';;
@@ -177,20 +178,21 @@ cat<<EOM > "$TMP_JSON"
 		},
 		"packages": {
 			"av98":         "$(/usr/local/bin/av98 --version | awk '{print $2}')",
-			"bombadillo":   "$(/usr/local/bin/bombadillo -v | awk '{print $2}' | sed 's/v//')",
+			"bombadillo":   "$(/usr/local/bin/bombadillo -v | awk '/Bombadillo/ {print $2}')",
 			"burrow":       "$(/usr/local/bin/burrow -v | sed 's/v//')",
-			"clinte":       "$(/usr/local/bin/clinte -V | awk '{print $2}')",
+			"clinte":       "$(/usr/local/bin/clinte -V | awk '/clinte/ {print $2}')",
 			"gfu":          "$(/usr/local/bin/gfu -v | sed '/version/s/.*version \([^ ][^ ]*\)[ ]*.*/\1/')",
 			"go":           "$(sed 's/go//' /usr/local/go/VERSION)",
-			"goaccess":     "$(/usr/bin/goaccess -V | head -1 | sed -e 's/GoAccess - //' -e '$ s/.$//')",
-			"meli":         "$(/usr/local/bin/meli --version | awk '{printf $2}')",
-			"micro":        "$(/usr/local/bin/micro -version | head -n1 | awk '{print $2}')",
+			"goaccess":     "$(/usr/bin/goaccess -V | awk '/GoAccess/ {print $3}')",
+			"meli":         "$(/usr/local/bin/meli --version | awk '/meli/ {printf $2}')",
+			"micro":        "$(/usr/local/bin/micro -version | awk '/Version/ {print $2}')",
+			"nimble"        "$(/usr/local/nimble/bin/nim -v | awk '/Version/ {print $4}')",
 			"pb":           "$(/usr/local/bin/pb -v)",
-			"twtxt":        "$(/usr/local/bin/twtxt --version | awk '{printf $3}')",
+			"twtxt":        "$(/usr/local/bin/twtxt --version | awk '/version/ {printf $3}')",
 			"txtnish":      "$(/usr/local/bin/txtnish -V)",
-			"vf1":          "$(/usr/local/bin/vf1 --version | awk '{print $2}')",
-			"vlang":        "$(/usr/local/bin/v --version | sed 's/V //')",
-			"zola":         "$(/usr/local/bin/zola -V | awk '{print $2}')",
+			"vf1":          "$(/usr/local/bin/vf1 --version | awk '/VF-1/ {print $2}')",
+			"vlang":        "$(/usr/local/bin/v --version | awk '/V/ {print $2}')",
+			"zola":         "$(/usr/local/bin/zola -V | awk '/zola/ {print $2}')",
 $(print_pkg_version)
 EOM
 			# remove trailing ',' on last line
@@ -214,13 +216,13 @@ print_pkg_info() {
 
 	local pkg_version
 	pkg_version="$(jq -Mr '.data.packages."'"$pkg"'"|select (.!=null)' "$JSON_FILE")"
-	[[ "$pkg_version" = '' ]] && pkg_version='n.a.'
+	[ "$pkg_version" = '' ] && pkg_version='n.a.'
 
 	local pkg_desc
 	custom_pkg_desc "$pkg"
-	[[ "$pkg_desc" = '' ]] && pkg_desc="$(apt-cache show "$pkg" | awk '/Description-en/ {print substr($0, index($0,$2))}' | head -1)"
-	[[ "$pkg_desc" = '' ]] && pkg_desc="$(apt-cache search ^"$pkg"$ | awk '{print substr($0, index($0,$3))}')"
-	[[ "$pkg_desc" = '' ]] && pkg_desc='n.a.'
+	[ "$pkg_desc" = '' ] && pkg_desc="$(apt-cache show "$pkg" | awk '/Description-en/ {print substr($0, index($0,$2))}' | head -1)"
+	[ "$pkg_desc" = '' ] && pkg_desc="$(apt-cache search ^"$pkg"$ | awk '{print substr($0, index($0,$3))}')"
+	[ "$pkg_desc" = '' ] && pkg_desc='n.a.'
 	# remove description-en string
 	pkg_desc="${pkg_desc//Description-en: /}"
 	# replace double qoutes with single qoute
@@ -330,7 +332,6 @@ EOM
 
 mv /tmp/sysinfo.php_tmp "$WWW_PATH"/sysinfo.php
 chown root:www-data "$WWW_PATH"/sysinfo.php
-
 
 #
 exit 0
