@@ -216,13 +216,13 @@ print_pkg_info() {
 
 	local pkg_version
 	pkg_version="$(jq -Mr '.data.packages."'"$pkg"'"|select (.!=null)' "$JSON_FILE")"
-	[ "$pkg_version" = '' ] && pkg_version='n.a.'
+	[ -z "$pkg_version" ] && pkg_version='n.a.'
 
 	local pkg_desc
 	custom_pkg_desc "$pkg"
-	[ "$pkg_desc" = '' ] && pkg_desc="$(apt-cache show "$pkg" | awk '/Description-en/ {print substr($0, index($0,$2))}' | head -1)"
-	[ "$pkg_desc" = '' ] && pkg_desc="$(apt-cache search ^"$pkg"$ | awk '{print substr($0, index($0,$3))}')"
-	[ "$pkg_desc" = '' ] && pkg_desc='n.a.'
+	[ -z "$pkg_desc" ] && pkg_desc="$(apt-cache show "$pkg" | awk '/Description-en/ {print substr($0, index($0,$2))}' | head -1)"
+	[ -z "$pkg_desc" ] && pkg_desc="$(apt-cache search ^"$pkg"$ | awk '{print substr($0, index($0,$3))}')"
+	[ -z "$pkg_desc" ] && pkg_desc='n.a.'
 	# remove description-en string
 	pkg_desc="${pkg_desc//Description-en: /}"
 	# replace double qoutes with single qoute
