@@ -7,7 +7,7 @@ WWW_PATH='/var/www/envs.net'
 DOMAIN="envs.net"
 
 
-[[ "$EUID" -ne 0 ]] && printf 'Please run as root!\n' && exit 1
+[ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
 #
 # user_updates.php
@@ -56,10 +56,10 @@ EOM
 				"email":       "$USERNAME@$DOMAIN",
 EOM
 # desc
-				if [[ -f "$INFO_FILE" ]]; then
+				if [ -f "$INFO_FILE" ]; then
 					desc="$(sed -n '/^desc=/{s#^.*=##;p}' "$INFO_FILE")"
 
-					if [[ -z "$desc" ]] || [[ "$desc" == 'a short describtion or message' ]]; then
+					if [ -z "$desc" ] || [ "$desc" == 'a short describtion or message' ]; then
 						cat << EOM >> "$TMP_JSON"
 				"desc":        "",
 EOM
@@ -74,7 +74,7 @@ EOM
 EOM
 				fi
 # website
-				if [[ -f "$USER_HOME"/public_html/index.php ]] || [[ "$(test -f "$USER_HOME"/public_html/index.*htm*; echo $?)" -eq 0 ]]; then
+				if [ -f "$USER_HOME"/public_html/index.php ] || [ "$(test -f "$USER_HOME"/public_html/index.*htm*; echo $?)" -eq 0 ]; then
 					cat << EOM >> "$TMP_JSON"
 				"website":     "https://$DOMAIN/~$USERNAME/",
 EOM
@@ -102,7 +102,7 @@ EOM
 EOM
 				fi
 # blog
-				if [[ "$(find "$USER_HOME"/public_html/blog/ -maxdepth 1 2>/dev/null | wc -l)" -ge 3 ]]; then
+				if [ "$(find "$USER_HOME"/public_html/blog/ -maxdepth 1 2>/dev/null | wc -l)" -ge 3 ]; then
 					cat << EOM >> "$TMP_JSON"
 				"blog":        "https://$DOMAIN/~$USERNAME/blog/",
 EOM
@@ -112,7 +112,7 @@ EOM
 EOM
 				fi
 # twtwt
-				if [[ -f "$USER_HOME"/public_html/twtxt.txt ]]; then
+				if [ -f "$USER_HOME"/public_html/twtxt.txt ]; then
 					cat << EOM >> "$TMP_JSON"
 				"twtxt":       "https://$DOMAIN/~$USERNAME/twtxt.txt",
 EOM
@@ -122,7 +122,7 @@ EOM
 EOM
 				fi
 # user custom infos from .envs file (max. 10 entrys)
-				if [[ -f "$INFO_FILE" ]]; then
+				if [ -f "$INFO_FILE" ]; then
 					count_entry='0'               # use to limit entrys
 					count_field_entry='0'         # use to separat array line by line
 
@@ -132,13 +132,13 @@ EOM
 
 					# check 'INFO_FILE' and add entrys to 'line_to_set' array
 					while read -r LINE ; do
-						if [[ -n "$LINE" ]] && ! [[ "$LINE" = '#'* ]] && ! [[ "$LINE" = 'desc='* ]]; then
+						if [ -n "$LINE" ] && ! [ "$LINE" = '#'* ] && ! [ "$LINE" = 'desc='* ]; then
 							user_field="${LINE//=*/}"
 							user_value="${LINE//*=/}"
 
-							if ! [[ ":${field_exists[*]}:" =~ $user_field ]]; then
+							if ! [ ":${field_exists[*]}:" =~ $user_field ]; then
 								# entry will be a single line
-								count_entry="$(( "$count_entry" + 1 ))"; [[ "$count_entry" -le '10' ]] || continue
+								count_entry="$(( "$count_entry" + 1 ))"; [ "$count_entry" -le '10' ] || continue
 								field_exists+=( "$user_field" )
 								line_to_set["$user_field","$count_field_entry"]+="$user_value"
 							else
@@ -174,7 +174,7 @@ EOM
 
 						if [[ ":${field_is_array[*]}:" =~ $field_name ]]; then
 							# begin of user def. array
-							if ! [[ "$field_in_progress" = "$field_name" ]]; then
+							if ! [ "$field_in_progress" = "$field_name" ]; then
 								field_in_progress="$field_name"
 
 								cat << EOM >> "$TMP_JSON"
@@ -186,7 +186,7 @@ EOM
 								cat << EOM >> "$TMP_JSON"
 					"${line_to_set[$field]}",
 EOM
-								if [[ "$field_count" -eq '0' ]]; then
+								if [ "$field_count" -eq '0' ]; then
 									# end of user def. array
 									# remove trailing ',' on last user entry
 									unset field_in_progress
@@ -204,7 +204,7 @@ EOM
 				"ssh-pubkey": [
 EOM
 					while read -r LINE ; do
-						[[ "$LINE" == 'ssh'* ]] && printf '\t\r\t\r\t\r\t\r\t"%s",\n' "$LINE" >> "$TMP_JSON"
+						[ "$LINE" == 'ssh'* ] && printf '\t\r\t\r\t\r\t\r\t"%s",\n' "$LINE" >> "$TMP_JSON"
 					done < "$USER_HOME"/.ssh/authorized_keys
 					# remove trailing ',' for the last pubkey
 					sed -i '$ s/,$//' "$TMP_JSON"

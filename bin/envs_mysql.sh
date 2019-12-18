@@ -13,7 +13,7 @@ print_usage() {
 }
 
 backup() {
-	[[ -z "$DB" ]] && DB="$USER"
+	[ -z "$DB" ] && DB="$USER"
 	test ! -d "$BACKUP_DIR" && mkdir -p "$BACKUP_DIR" && chmod 700 "$BACKUP_DIR"
 
 	mysqldump -u "$USER" "$DB" -p | gzip -c > "$BACKUP_DIR"/db_"$(date +%F.%H%M%S)".sql.gz
@@ -21,9 +21,9 @@ backup() {
 }
 
 restore() {
-	if [[ -z "$DB" ]]; then
-		latest=''; for f in "$BACKUP_DIR"/db_*.gz; do [[ "$f" -nt "$latest" ]] && latest="$f"; done
-		[[ -z "$latest" ]] && printf 'no restore file found in %s!\n' "$BACKUP_DIR" && exit 0
+	if [ -z "$DB" ]; then
+		latest=''; for f in "$BACKUP_DIR"/db_*.gz; do [ "$f" -nt "$latest" ] && latest="$f"; done
+		[ -z "$latest" ] && printf 'no restore file found in %s!\n' "$BACKUP_DIR" && exit 0
 		DB="$latest"
 		gunzip < "$DB" | mysql -u "$USER" "$USER" -p
 	else
@@ -31,7 +31,7 @@ restore() {
 	fi
 }
 
-[[ $# -lt 1 ]] && print_usage && exit 1
+[ $# -lt 1 ] && print_usage && exit 1
 
 case "$CMD" in
 	backup*)	backup;;

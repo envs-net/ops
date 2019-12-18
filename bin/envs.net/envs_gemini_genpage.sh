@@ -4,7 +4,7 @@
 # - this script is called by /etc/cron.d/envs_gemini
 #
 
-[[ "$EUID" -ne 0 ]] && printf 'Please run as root!\n' && exit 1
+[ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
 ###
 
@@ -12,10 +12,10 @@ userlist() {
 	mapfile -t users < <(jq -Mr '.data.users|keys[]' /var/www/envs.net/users_info.json)
 	for USERNAME in "${users[@]}"; do
 		if [ -f /home/"$USERNAME"/public_gemini/index.gmi ]; then
-			[[ ! -L /var/gemini/\~"$USERNAME" ]] && ln -s /home/"$USERNAME"/public_gemini /var/gemini/\~"$USERNAME"
+			[ ! -L /var/gemini/\~"$USERNAME" ] && ln -s /home/"$USERNAME"/public_gemini /var/gemini/\~"$USERNAME"
 			printf '=> gemini://envs.net/~%s/ ~%s\n' "$USERNAME" "$USERNAME"
 		else
-			[[ -L /var/gemini/\~"$USERNAME" ]] && unlink /var/gemini/\~"$USERNAME"
+			[ -L /var/gemini/\~"$USERNAME" ] && unlink /var/gemini/\~"$USERNAME"
 		fi
 	done
 }

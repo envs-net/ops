@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-[[ "$EUID" -ne 0 ]] && printf 'Please run as root!\n' && exit 1
+[ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
 log_file='/var/log/envs_conntrack.log'
 
