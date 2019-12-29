@@ -74,7 +74,7 @@ add_user() {
 
 	# send readme mail
 	readme_sub="Subject: Welcome ~$user | please readme!"
-	readme_mail="$head_def\r\nTo: $user@$domain\r\nFrom: sudoers@$domain\r\n$readme_sub"
+	readme_mail="$head_def\r\nTo: $mailTo\r\nCC: $user@$domain\r\nFrom: sudoers@$domain\r\n$readme_sub"
 
 	echo -e "$readme_mail\r\n$(cat /usr/local/bin/envs.net/welcome-readme.tmpl)" | sendmail "$user"@"$domain"
 
