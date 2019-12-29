@@ -5,12 +5,16 @@ welcome to envs.net!
 your account has been established and you can ssh or mosh
 into envs.net with the ssh key you supplied on registration.
 
-your password is "_password_".
-please change it when you log in for the first time with ssh.
-also you need to change the password on https://mail.envs.net !
-the password is used for imap/smtp auth(mail) and mysql. NOT shell login,
-which is set to only use ssh key authentication.
-your mail password will also used for znc.envs.net (imap-auth).
+your password is: _password_
+
+please change it when you log in for the first time with ssh (use: passwd)
+and
+also you need to change the password for your mailaccount (imap/smtp)
+on https://mail.envs.net ! ( login with user: _username_@envs.net )
+
+your mail password will also used for znc.envs.net (irc bouncer) and
+git.envs.net (code hosting). (we use imap-auth for this.)
+
 
 the best way you can help envs.net is by working
 to support a great system culture. build cool programs and
@@ -20,6 +24,7 @@ good example for others and have fun!
 your ~/public_www directory is served at:
 https://envs.net/~_username_ , https://envs.net/u/_username_
 https://_username_.envs.net and https://_username_.envs.sh/.
+
 
 your mysql database is also has been provisioned. information below should
 be used to connect to it:
@@ -31,7 +36,7 @@ password: (see your password above)
 of course you can also use sqlite databases.
 
 
-check out our help page at https://help.envs.net/ for more informations.
+please check out our help page at https://help.envs.net/ for more informations.
 
 we seeing you! :)
 
