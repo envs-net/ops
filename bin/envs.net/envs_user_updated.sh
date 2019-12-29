@@ -132,11 +132,11 @@ EOM
 
 					# check 'INFO_FILE' and add entrys to 'line_to_set' array
 					while read -r LINE ; do
-						if [ -n "$LINE" ] && ! [ "$LINE" = '#'* ] && ! [ "$LINE" = 'desc='* ]; then
+						if [[ -n "$LINE" ]] && ! [[ "$LINE" = '#'* ]] && ! [[ "$LINE" = 'desc='* ]]; then
 							user_field="${LINE//=*/}"
 							user_value="${LINE//*=/}"
 
-							if ! [ ":${field_exists[*]}:" =~ $user_field ]; then
+							if ! [[ ":${field_exists[*]}:" =~ $user_field ]]; then
 								# entry will be a single line
 								count_entry="$(( "$count_entry" + 1 ))"; [ "$count_entry" -le '10' ] || continue
 								field_exists+=( "$user_field" )
@@ -204,7 +204,7 @@ EOM
 				"ssh-pubkey": [
 EOM
 					while read -r LINE ; do
-						[ "$LINE" == 'ssh'* ] && printf '\t\r\t\r\t\r\t\r\t"%s",\n' "$LINE" >> "$TMP_JSON"
+						[[ "$LINE" == 'ssh'* ]] && printf '\t\r\t\r\t\r\t\r\t"%s",\n' "$LINE" >> "$TMP_JSON"
 					done < "$USER_HOME"/.ssh/authorized_keys
 					# remove trailing ',' for the last pubkey
 					sed -i '$ s/,$//' "$TMP_JSON"
