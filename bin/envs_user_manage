@@ -9,10 +9,13 @@ user="$2"
 mailTo="$3"
 ssh_pubkey="$4"
 
+#do not start znc to add more users
+no_znc="$5" # check if emtpy
+
 newpw=$(pwgen -s 12 1)
 pwcrypt=$(perl -e "print crypt('${newpw}', 'sa');")
 
-# mail header
+# default mail header
 head_mime='MIME-Version: 1.0'
 head_type='Content-type: text/plain; charset=utf-8'
 head_def="$head_mime\r\n$head_type"
@@ -28,8 +31,15 @@ EOF
 }
 
 del_user_db() {
-	mysqldump -u root "$user" > /tmp/"$user".sql
-	mv /tmp/"$user".sql /root/mysql_dumps/"$user".sql
+	printf '\nbackup mysqldump by user %s?\n' "$user"
+	select yn in "Yes" "No"; do
+	case $yn in
+		Yes)
+			mysqldump -u root "$user" > /tmp/"$user".sql
+			mv /tmp/"$user".sql /root/mysql_dumps/"$user".sql
+			break ;;
+		No) break ;;
+	esac ; done
 
 	mysql -u root << EOF
 DROP DATABASE $user;
@@ -78,15 +88,19 @@ add_user() {
 
 	echo -e "$readme_mail\r\n$(cat /usr/local/bin/envs.net/welcome-readme.tmpl)" | sendmail "$user"@"$domain"
 
+	sleep 1
+
 	# send welcome mail
 	wel_sub="Subject: Welcome to $domain | ~$user"
 	wel_mail="$head_def\r\nTo: $mailTo\r\nCC: $user@$domain\r\nFrom: hosting@$domain\r\n$wel_sub"
 
-	sleep 1 && echo -e "$wel_mail\r\n$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /usr/local/bin/envs.net/welcome-email.tmpl)" \
+	echo -e "$wel_mail\r\n$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /usr/local/bin/envs.net/welcome-email.tmpl)" \
 		| sendmail "$user"@"$domain" "$mailTo"
 
+	sleep 1
+
 	# subscribing to mailing list
-	sleep 1 && echo -e "$head_def\r\nTo: team-join@$domain\r\nFrom: $user@$domain\r\nSubject: subscribe\r\n" \
+	echo -e "$head_def\r\nTo: team-join@$domain\r\nFrom: $user@$domain\r\nSubject: subscribe\r\n" \
 		| sudo -u "$user" sendmail team-join@"$domain"
 
 	# setup mutt
@@ -97,7 +111,7 @@ add_user() {
 	# setup znc account
 	sudo -u znc pkill -SIGUSR1 znc && pkill znc
 	sudo -u znc /srv/znc/add_znc_user.sh "$user"
-	systemctl start znc.service
+	[ -z "$no_znc" ] && systemctl start znc.service
 
 	# setup weechat
 	sed -i s/_username_/"$user"/g /home/"$user"/.weechat/irc.conf
@@ -111,7 +125,6 @@ add_user() {
 	# announcing new user on mastodon
 	sudo -u services toot post "welcome new user ~$user"
 }
-
 
 del_user() {
 	# unsubscribe mailing list
@@ -131,18 +144,18 @@ del_user() {
 	# remove database
 	del_user_db
 	# unlink gemini
-	[[ -L /var/gemini/\~"$user" ]] && unlink /var/gemini/\~"$user"
+	[ -L /var/gemini/\~"$user" ] && unlink /var/gemini/\~"$user"
 	# remove znc account
 	printf '\n!!! ADMIN: please remove %s also from lists.%s and znc.%s !!!\n\n' "$user" "$domain" "$domain"
 }
 
 
-[[ "$EUID" -ne 0 ]] && printf 'Please run as root!\n' && exit 1
+[ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
 case "$cmd" in
-  add)	[[ $# -lt 3 ]] && printf 'not enough args\n' && exit 1
+  add)	[ $# -lt 3 ] && printf 'not enough args\n' && exit 1
 		if ! id -u "$user" >/dev/null 2>&1; then
-			printf '\nAdd User %s to %s\n' "$user" "$domain"
+			printf '\nAdd User %s to %s.\n' "$user" "$domain"
 			printf 'mail to: %s\n\n' "$mailTo"
 			add_user
 		else
@@ -150,13 +163,13 @@ case "$cmd" in
 		fi
   ;;
 
-  del)	[[ $# -lt 2 ]] && printf 'not enough args\n' && exit 1
+  del)	[ $# -lt 2 ] && printf 'not enough args\n' && exit 1
 		if id -u "$user" >/dev/null 2>&1; then
 			printf '\nDelete User %s from %s?\n' "$user" "$domain"
 			select yn in "Yes" "No"; do
 			case $yn in
-				Yes	) del_user ; break ;;
-				No  ) break ;;
+				Yes) del_user ; break ;;
+				No) break ;;
 			esac ; done
 		else
 			printf 'User not exists!\n'
