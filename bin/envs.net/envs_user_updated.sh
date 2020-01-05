@@ -55,10 +55,10 @@ EOM
 				"home":        "$USER_HOME",
 				"email":       "$USERNAME@$DOMAIN",
 EOM
-# desc
+# desc / irc / matrix
 				if [ -f "$INFO_FILE" ]; then
+# desc
 					desc="$(sed -n '/^desc=/{s#^.*=##;p}' "$INFO_FILE")"
-
 					if [ -z "$desc" ] || [ "$desc" == 'a short describtion or message' ]; then
 						cat << EOM >> "$TMP_JSON"
 				"desc":        "",
@@ -68,9 +68,34 @@ EOM
 				"desc":        "$desc",
 EOM
 					fi
+# irc
+					irc="$(sed -n '/^irc=/{s#^.*=##;p}' "$INFO_FILE")"
+					if [ -z "$irc" ]; then
+						cat << EOM >> "$TMP_JSON"
+				"irc":        "",
+EOM
+					else
+						cat << EOM >> "$TMP_JSON"
+				"irc":        "$irc",
+EOM
+					fi
+# matrix
+					matrix="$(sed -n '/^matrix=/{s#^.*=##;p}' "$INFO_FILE")"
+					if [ -z "$matrix" ]; then
+						cat << EOM >> "$TMP_JSON"
+				"matrix":        "",
+EOM
+					else
+						cat << EOM >> "$TMP_JSON"
+				"matrix":        "$matrix",
+EOM
+					fi
+# end desc / irc / matrix
 				else
 					cat << EOM >> "$TMP_JSON"
 				"desc":        "",
+				"irc":         "",
+				"matrix":      "",
 EOM
 				fi
 # website
@@ -132,7 +157,8 @@ EOM
 
 					# check 'INFO_FILE' and add entrys to 'line_to_set' array
 					while read -r LINE ; do
-						if [[ -n "$LINE" ]] && ! [[ "$LINE" = '#'* ]] && ! [[ "$LINE" = 'desc='* ]]; then
+						if [[ -n "$LINE" ]] && ! [[ "$LINE" = '#'* ]] && ! [[ "$LINE" = 'desc='* ]] && \
+						! [[ "$LINE" = 'irc='* ]] && ! [[ "$LINE" = 'matrix='* ]]; then
 							user_field="${LINE//=*/}"
 							user_value="${LINE//*=/}"
 
