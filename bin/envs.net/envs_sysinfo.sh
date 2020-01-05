@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad getwtxt gitea gophernicus jetforce mariadb-server nginx openssh-server privatebin matrix searx termbin tt-rss thelounge znc)
+services=(0x0 bbj cryptpad getwtxt gitea gophernicus jetforce mariadb-server matrix nginx openssh-server privatebin searx termbin tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -144,15 +144,15 @@ cat<<EOM > "$TMP_JSON"
 				"version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
 				"url":         "gemini://envs.net/"
 			},
-			"privatebin": {
-				"desc":        "a pastebin service",
-				"version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed '$ s/*$//'")",
-				"url":         "https://pb.envs.net/"
-			},
 			"matrix": {
 				"desc":        "an open network for secure, decentralized communication",
 				"version":     "$(curl -s https://matrix."$DOMAIN"/_synapse/admin/v1/server_version | jq -Mr .server_version)",
 				"url":         "https://matrix.envs.net/"
+			},
+			"privatebin": {
+				"desc":        "a pastebin service",
+				"version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed '$ s/*$//'")",
+				"url":         "https://pb.envs.net/"
 			},
 			"searx": {
 				"desc":        "privacy-respecting metasearch engine",
