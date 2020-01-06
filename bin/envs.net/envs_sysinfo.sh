@@ -11,7 +11,8 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad getwtxt gitea gophernicus jetforce mariadb-server matrix nginx openssh-server privatebin searx termbin tt-rss thelounge znc)
+services=(0x0 bbj cryptpad getwtxt gitea gophernicus jetforce mariadb-server matrix nginx openssh-server
+		privatebin riot-web searx termbin tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -153,6 +154,11 @@ cat<<EOM > "$TMP_JSON"
 				"desc":        "a pastebin service",
 				"version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed '$ s/*$//'")",
 				"url":         "https://pb.envs.net/"
+			},
+			"riot-web": {
+				"desc":        "a universal secure chat app for matrix (web-client)",
+				"version":     "$(lxc-attach -n matrix -- bash -c "dpkg-query -f '\${Version}\n' -W riot-web")",
+				"url":         "https://matrix.envs.net/"
 			},
 			"searx": {
 				"desc":        "privacy-respecting metasearch engine",
