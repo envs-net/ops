@@ -220,6 +220,10 @@ if [ "$1" = "start" ]; then
 	#
 	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 8448 -j DNAT --to-destination 192.168.1.14:8448
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.14 --dport 8448 -j ACCEPT
+	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 3478 -j DNAT --to-destination 192.168.1.14:3478
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.14 --dport 3478 -j ACCEPT
+	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p udp --dport 3478 -j DNAT --to-destination 192.168.1.14:3478
+	$IPT -w -A FORWARD -p udp -d 192.168.1.14 --dport 3478 -j ACCEPT
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.14 -j SNAT --to 89.163.145.170
 
 	# 0x0
