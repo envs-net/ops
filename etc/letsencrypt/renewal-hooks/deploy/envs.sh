@@ -19,7 +19,7 @@ for domain in $RENEWED_DOMAINS; do
 			cp "$daemon_cert_root/fullchain.pem" "$matrix_dir"/
 			chmod 600 "$matrix_dir"/*.pem
 			chown 108:0 "$matrix_dir"/*.pem
-			lxc-attach -n matrix -- bash -c "systemctl reload nginx ; systemctl restart matrix-synapse"
+			lxc-attach -n matrix -- bash -c "systemctl reload nginx ; systemctl restart matrix-synapse coturn"
 
 			# mail
 			lxc-attach -n mail -- bash -c "systemctl reload nginx postfix dovecot"
