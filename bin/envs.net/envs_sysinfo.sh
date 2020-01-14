@@ -307,7 +307,7 @@ include 'header.php';
 		<pre class="clean"><strong><a href="/">&lt; back</a></strong></pre>
 	  </div>
 
-	  <div id="main">
+	  <div id="main" style="padding-bottom: 4em;">
 <div class="block">
 <pre>
 <h1><em>sysinfo</em></h1>
