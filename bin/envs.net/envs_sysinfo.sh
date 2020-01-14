@@ -325,6 +325,7 @@ this is a static list of the package informations. it updates once per day.
 <strong>&#35; can i get [package] installed?</strong>
 probably! send an email with your suggestion to <a href="mailto:sudoers@$DOMAIN">sudoers@$DOMAIN</a>.
 </pre>
+<br />
 $(print_category 'services' "${sorted_services[@]}")
 <br />
 $(print_category 'shells' "${sorted_shells[@]}")
