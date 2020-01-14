@@ -324,15 +324,20 @@ this is a static list of the package informations. it updates once per day.
 
 <strong>&#35; can i get [package] installed?</strong>
 probably! send an email with your suggestion to <a href="mailto:sudoers@$DOMAIN">sudoers@$DOMAIN</a>.
-
-$(print_category 'services' "${sorted_services[@]}")
-$(print_category 'shells' "${sorted_shells[@]}")
-$(print_category 'editors' "${sorted_editors[@]}")
-$(print_category 'online_browser_and_clients' "${sorted_inet_clients[@]}")
-$(print_category 'coding_packages' "${sorted_coding_pkg[@]}")
-$(print_category 'coding_tools' "${sorted_coding_tools[@]}")
-$(print_category 'misc' "${sorted_misc[@]}")
 </pre>
+$(print_category 'services' "${sorted_services[@]}")
+<br />
+$(print_category 'shells' "${sorted_shells[@]}")
+<br />
+$(print_category 'editors' "${sorted_editors[@]}")
+<br />
+$(print_category 'online_browser_and_clients' "${sorted_inet_clients[@]}")
+<br />
+$(print_category 'coding_packages' "${sorted_coding_pkg[@]}")
+<br />
+$(print_category 'coding_tools' "${sorted_coding_tools[@]}")
+<br />
+$(print_category 'misc' "${sorted_misc[@]}")
 	  </div>
 
 <?php include 'footer.php'; ?>
