@@ -43,6 +43,7 @@ del_user_db() {
 
 	mysql -u root << EOF
 DROP DATABASE $user;
+DROP USER $user@localhost;
 FLUSH PRIVILEGES;
 EOF
 }
