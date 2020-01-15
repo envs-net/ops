@@ -25,7 +25,7 @@ head_def="$head_mime\r\n$head_type"
 add_user_db() {
 	mysql -u root << EOF
 CREATE DATABASE $user;
-GRANT ALL PRIVILEGES ON $USER.* TO '$user'@'localhost' IDENTIFIED BY '$newpw';
+GRANT ALL PRIVILEGES ON $user.* TO '$user'@'localhost' IDENTIFIED BY '$newpw';
 FLUSH PRIVILEGES;
 EOF
 }
