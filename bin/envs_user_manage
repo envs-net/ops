@@ -22,30 +22,37 @@ head_def="$head_mime\r\n$head_type"
 
 ###
 
-add_user_db() {
-	mysql -u root << EOF
-CREATE DATABASE $user;
-GRANT ALL PRIVILEGES ON $user.* TO '$user'@'localhost' IDENTIFIED BY '$newpw';
-FLUSH PRIVILEGES;
-EOF
+add_user_mysql_db() {
+	mysql -u root << EOM
+CREATE DATABASE $user ;
+GRANT ALL PRIVILEGES ON '$user'.* TO '$user'@'localhost' IDENTIFIED BY '$newpw' ;
+FLUSH PRIVILEGES ;
+EOM
 }
 
-del_user_db() {
-	printf '\nbackup mysqldump by user %s?\n' "$user"
-	select yn in "Yes" "No"; do
-	case $yn in
-		Yes)
-			mysqldump -u root "$user" > /tmp/"$user".sql
-			mv /tmp/"$user".sql /root/mysql_dumps/"$user".sql
-			break ;;
-		No) break ;;
-	esac ; done
+del_user_mysql_db() {
+	mysql -u root << EOM
+DROP DATABASE $user ;
+DROP USER $user@localhost ;
+FLUSH PRIVILEGES ;
+EOM
+}
 
-	mysql -u root << EOF
-DROP DATABASE $user;
-DROP USER $user@localhost;
-FLUSH PRIVILEGES;
-EOF
+
+add_user_pgsql_db() {
+	sudo -u postgres psql <<EOM
+CREATE USER $user WITH PASSWORD '$newpw' ;
+CREATE DATABASE $user ENCODING 'UTF8' LC_COLLATE='C' LC_CTYPE='C' template=template0 OWNER $user ;
+GRANT ALL PRIVILEGES ON DATABASE $user to $user ;
+EOM
+}
+
+del_user_pgsql_db() {
+	sudo -u postgres psql <<EOM
+DROP DATABASE $user ;
+DROP OWNED BY $user ;
+DROP USER $user ;
+EOM
 }
 
 
@@ -74,7 +81,8 @@ add_user() {
 	chown -R "$user":"$short_dom" /home/"$user"/.ssh
 
 	# setup database
-	add_user_db
+	add_user_mysql_db
+	#add_user_pgsql_db
 
 	# setup email mailbox
 	lxc-attach -n mail -- bash -c "/usr/local/bin/coreapi action accounts create \
@@ -143,7 +151,8 @@ del_user() {
 	mail_userid=$(lxc-attach -n mail -- bash -c "/usr/local/bin/coreapi action accounts list -p search=$user@$domain | jq '.[] | .pk'")
 	lxc-attach -n mail -- bash -c "/usr/local/bin/coreapi action accounts delete -p id=$mail_userid"
 	# remove database
-	del_user_db
+	del_user_mysql_db
+	#del_user_pgsql_db
 	# unlink gemini
 	[ -L /var/gemini/\~"$user" ] && unlink /var/gemini/\~"$user"
 	# remove znc account
