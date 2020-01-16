@@ -11,7 +11,7 @@ if [ -z "$1" ]; then
     echo -e "Usage: $(basename "$0") [username]" ; exit 1
 fi
 
-if grep -Fxq "<User $2>" "$CONF"; then
+if grep -Fxq "<User $1>" "$CONF"; then
     echo -e "znc user \"$1\" already exists" ; exit 1
 fi
 
