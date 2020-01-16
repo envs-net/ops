@@ -91,6 +91,8 @@ var:
 	@printf "$(GREEN)--- var ------------------------------------------------\n$(RESET)"
 	git submodule update --remote --init -- var/tilde/admins
 	stow -t /var var
+	@chown -R www-data:root /var/signups* /var/banned_emails.txt
+	@chmod 600 /var/signups* /var/banned_emails.txt
 
 znc:
 	@printf "$(GREEN)--- znc ------------------------------------------------\n$(RESET)"
