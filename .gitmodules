@@ -1,0 +1,3 @@
+[submodule "var/tilde/admins"]
+	path = var/tilde/admins
+	url = git@git.envs.net:envs/admins.git
