@@ -101,6 +101,11 @@ cat<<EOM > "$TMP_JSON"
 			"admin_email":  "sudoers@$DOMAIN",
 			"user_count":   $(find /home -mindepth 1 -maxdepth 1 | wc -l)
 		},
+		"SSHFP": {
+			"RSA":          "SHA256:7dB470mfzlyhhtqmjnXciIxp+jWLACiYKC3EE/Z0lFg",
+			"ECDSA":        "SHA256:U0C6SKGXUflve16m2l4KWBdLLARW6O8TiGWZsXAU2i4",
+			"ED25519":      "SHA256:V+mXTsRJ+jfJMxxPlD/28dpWouuns3Wuqwppv6ykVC8"
+		},
 		"system": {
 			"os":           "$(lsb_release -sd)",
 			"uptime":       "$(cat /proc/uptime)",
