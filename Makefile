@@ -11,12 +11,13 @@ RESET = $$(tput sgr0)
 
 
 install:
-	@make bin etc cron fail2ban initd letsencrypt nginx ssh sysctl systemd motd znc
+	@make bin etc cron fail2ban initd letsencrypt nginx ssh sysctl systemd motd var znc
 
 uninstall:
 	@make clean
+
 clean:
-	@printf "$(YELLOW)--- clean -----------------------------------------------\n$(RESET)"
+	@printf "$(YELLOW)--- clean ---------------------------------------------\n$(RESET)"
 	stow -t "$(BINDIR)" -D bin
 
 	stow -t /etc/cron.d -D -d etc cron.d
@@ -29,6 +30,9 @@ clean:
 	stow -t /etc/sysctl.d -D -d etc sysctl.d
 	stow -t /etc/systemd/system -D -d etc/systemd system
 	stow -t /etc/update-motd.d -D -d etc update-motd.d
+
+	stow -t /var/ -D -d var tilde
+	stow -t /var/ -D -d var signups_forbidden
 
 	@rm -fv /srv/znc/add_znc_user.sh /srv/znc/newuser.conf.template
 
@@ -83,6 +87,12 @@ motd:
 	@printf "$(GREEN)--- motd -----------------------------------------------\n$(RESET)"
 	stow -t /etc/update-motd.d -d etc update-motd.d
 
+var:
+	@printf "$(GREEN)--- var ------------------------------------------------\n$(RESET)"
+	git submodule update --remote --init -- var/tilde/admins
+	stow -t /var/ -d var tilde
+	stow -t /var/ -d var signups_forbidden
+
 znc:
 	@printf "$(GREEN)--- znc ------------------------------------------------\n$(RESET)"
 	@install -m 755 srv/znc/add_znc_user.sh /srv/znc
@@ -110,6 +120,8 @@ nuke:
 	@rm -fv /etc/systemd/system/bbj.service /etc/systemd/system/gopherproxy.service \
 		/etc/systemd/system/ifconfigme.service /etc/systemd/system/thelounge.service /etc/systemd/system/znc.service
 	@rm -fv /etc/update-motd.d/*
+
+	@rm -rfv /var/tilde /var/signups_forbidden /var/banned_emails.txt
 
 	@rm -fv /srv/znc/add_znc_user.sh /srv/znc/newuser.conf.template
 
