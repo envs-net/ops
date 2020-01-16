@@ -133,10 +133,10 @@ add_user() {
 	chmod go-r /home/"$user"/.muttrc
 	printf '\n~%s\n' "$user" > /home/"$user"/.mutt/signature
 
-	# setup znc account
-	sudo -u znc pkill -SIGUSR1 znc && pkill znc
-	sudo -u znc /srv/znc/add_znc_user.sh "$user"
-	[ -z "$no_znc" ] && systemctl start znc.service
+	# setup znc account (only after request..)
+	#sudo -u znc pkill -SIGUSR1 znc && pkill znc
+	#sudo -u znc /srv/znc/add_znc_user.sh "$user"
+	#[ -z "$no_znc" ] && systemctl start znc.service
 
 	# setup weechat
 	sed -i s/_username_/"$user"/g /home/"$user"/.weechat/irc.conf
