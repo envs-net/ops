@@ -3,6 +3,5 @@
 #
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-MAILTO=""
 
-0 0 * * *  root  cd /var/tilde/admins/ && git pull origin master; cp raw/banned_emails.txt /var
+0 0 * * *  root  /var/update_tilde_repo.sh >/dev/null 2>&1
