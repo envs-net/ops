@@ -1,0 +1,7 @@
+#
+# update tilde-admin repo (once per day)
+#
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+0 0 * * * root cd /var/tilde/admins/ && git pull >/dev/null 2>&1

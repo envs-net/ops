@@ -90,8 +90,7 @@ motd:
 var:
 	@printf "$(GREEN)--- var ------------------------------------------------\n$(RESET)"
 	git submodule update --remote --init -- var/tilde/admins
-	stow -t /var/ -d var tilde
-	stow -t /var/ -d var signups_forbidden
+	stow -t /var var
 
 znc:
 	@printf "$(GREEN)--- znc ------------------------------------------------\n$(RESET)"
@@ -126,4 +125,4 @@ nuke:
 	@rm -fv /srv/znc/add_znc_user.sh /srv/znc/newuser.conf.template
 
 
-.PHONY: install clean uninstall nuke bin etc cron fail2ban initd letsencrypt nginx ssh sysctl systemd motd znc
+.PHONY: install clean uninstall nuke bin etc cron fail2ban initd letsencrypt nginx ssh sysctl systemd motd var znc
