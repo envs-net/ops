@@ -3,5 +3,6 @@
 #
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+MAILTO=""
 
-0 0 * * * root cd /var/tilde/admins/ && git pull >/dev/null 2>&1
+0 0 * * *  root  cd /var/tilde/admins/ && git pull origin master; cp raw/banned_emails.txt /var
