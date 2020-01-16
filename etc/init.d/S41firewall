@@ -201,6 +201,8 @@ if [ "$1" = "start" ]; then
 	# => apache2 proxy (http/https)
 	$IPT -w -t nat -A PREROUTING -d 5.199.130.141 -p tcp --dport 22 -j DNAT --to-destination 192.168.1.10:22
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.10 --dport 22 -j ACCEPT
+	#
+	$IPT -w -t nat -A POSTROUTING -d 192.168.1.3 -s 192.168.1.10 -j SNAT --to 5.199.130.141
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.10 -j SNAT --to 5.199.130.141
 
 	# searx
@@ -209,10 +211,12 @@ if [ "$1" = "start" ]; then
 
 	# cryptpad
 	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A POSTROUTING -d 192.168.1.3 -s 192.168.1.12 -j SNAT --to 89.163.145.170
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.12 -j SNAT --to 89.163.145.170
 
 	# drone
 	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A POSTROUTING -d 192.168.1.3 -s 192.168.1.13 -j SNAT --to 5.199.130.141
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.13 -j SNAT --to 5.199.130.141
 
 	# matrix
@@ -228,6 +232,7 @@ if [ "$1" = "start" ]; then
 	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p udp --dport 64000:65535 -j DNAT --to-destination 192.168.1.14 --sport 64000:65535
 	$IPT -w -A FORWARD -p udp -d 192.168.1.14 --dport 64000:65535 -j ACCEPT
 	#
+	$IPT -w -t nat -A POSTROUTING -d 192.168.1.3 -s 192.168.1.14 -j SNAT --to 89.163.145.170
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.14 -j SNAT --to 89.163.145.170
 
 	# 0x0
@@ -238,6 +243,7 @@ if [ "$1" = "start" ]; then
 
 	# rss
 	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A POSTROUTING -d 192.168.1.3 -s 192.168.1.16 -j SNAT --to 89.163.145.170
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.16 -j SNAT --to 89.163.145.170
 
 	# pb
