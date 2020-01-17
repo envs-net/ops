@@ -186,7 +186,7 @@ del_user() {
 	# unlink gemini
 	[ -L /var/gemini/\~"$user" ] && unlink /var/gemini/\~"$user"
 
-	# remove znc account
+	# remove znc and mailinglist account
 	printf '\n!!! ADMIN: please remove %s also from lists.%s and znc.%s !!!\n\n' "$user" "$domain" "$domain"
 }
 

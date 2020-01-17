@@ -92,8 +92,9 @@ var:
 	git submodule update --remote --init -- var/tilde/admins
 	stow -t /var var
 	@cp -f /var/tilde/admins/raw/banned_emails.txt /var/tilde/admins/raw/banned_names.txt /var
-	@chown -R www-data:root /var/signups* /var/banned_emails.txt /var/banned_names.txt
-	@chmod 600 /var/signups* /var/banned_emails.txt /var/banned_names.txt
+	@chown -R root:www-data /var/signups* /var/banned_emails.txt /var/banned_names.txt
+	@chmod 660 /var/signups*
+	@chmod 640 /var/banned_emails.txt /var/banned_names.txt
 
 znc:
 	@printf "$(GREEN)--- znc ------------------------------------------------\n$(RESET)"
