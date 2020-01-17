@@ -92,7 +92,8 @@ var:
 	git submodule update --remote --init -- var/tilde/admins
 	make -C /var/tilde/admins/ DEST_DIR=/var/ DEST_OWNER=root DEST_GROUP=www-data
 	stow -t /var var
-	@install -o root -g www-data -m 640 var/signups* /var
+	@chown -R root:www-data /var/signups*
+	@chmod 660 /var/signups*
 
 znc:
 	@printf "$(GREEN)--- znc ------------------------------------------------\n$(RESET)"
@@ -122,7 +123,7 @@ nuke:
 		/etc/systemd/system/ifconfigme.service /etc/systemd/system/thelounge.service /etc/systemd/system/znc.service
 	@rm -fv /etc/update-motd.d/*
 
-	@rm -rfv /var/tilde /var/signups_forbidden /var/banned_emails.txt
+	@rm -rfv /var/tilde /var/signups_forbidden /var/banned_*.txt
 
 	@rm -fv /srv/znc/add_znc_user.sh /srv/znc/newuser.conf.template
 
