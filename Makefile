@@ -90,11 +90,9 @@ motd:
 var:
 	@printf "$(GREEN)--- var ------------------------------------------------\n$(RESET)"
 	git submodule update --remote --init -- var/tilde/admins
+	make -C /var/tilde/admins/ DEST_DIR=/var/ DEST_OWNER=root DEST_GROUP=www-data
 	stow -t /var var
-	@cp -f /var/tilde/admins/raw/banned_emails.txt /var/tilde/admins/raw/banned_names.txt /var
-	@chown -R root:www-data /var/signups* /var/banned_emails.txt /var/banned_names.txt
-	@chmod 660 /var/signups*
-	@chmod 640 /var/banned_emails.txt /var/banned_names.txt
+	@install -o root -g www-data -m 640 var/signups* /var
 
 znc:
 	@printf "$(GREEN)--- znc ------------------------------------------------\n$(RESET)"
