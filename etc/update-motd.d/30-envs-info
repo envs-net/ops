@@ -4,29 +4,30 @@ cat << EOM
 
 cool things to do while you're here on envs.net:
 
-* weechat   - talk to other cool people on irc
-* webirc    - add your webchat account for our thelounge
-* neomutt   - default @envs.net command line mail client
-* clinte    - community notices system
-* bbj       - forum - command line bbs (bulletin butter and jelly)
-* talk      - old school chat utility (man talk for more info)
-* who       - see who else is connected right now
-* finger    - get info on other users (local and remote)
-* envs      - manage your users_info.json entrys and user-submitted scripts
-* envs_toot - submit a post to the official envs.net mastodon account
-              (https://tilde.zone/@envs)
-* pb        - command line pastebin - see https://envs.sh and man pb
-* twtxt     - minimalist microblogging service - see twtxt --help
-* todo-txt  - simple todo managing
-* burrow    - manage your gopherhole - try burrow -h to see the options
-* hole      - open our envs.net gopherhole
-* feels     - ttbp feels engine
-              post to local feels, somewhere on your site, or gopher
-  or bb     - bashblog - see https://help.envs.net/blog/#with-bashblog
-* botany    - tend to your plants and visit teammates' gardens
-* sl        - spacelaunch: check sl -h for more info
-* dcss      - connect to crawl.tildeverse.org with ssh to play
-              dungeon crawl: stone soup
+* weechat     - talk to other cool people on irc
+* webirc      - add your webchat account for our thelounge
+* neomutt     - default @envs.net command line mail client
+* clinte      - community notices system
+* bbj         - forum - command line bbs (bulletin butter and jelly)
+* linkulator  - a link aggregator for the shell
+* talk        - old school chat utility (man talk for more info)
+* who         - see who else is connected right now
+* finger      - get info on other users (local and remote)
+* envs        - manage your users_info.json entrys and user-submitted scripts
+* envs_toot   - submit a post to the official envs.net mastodon account
+                (https://tilde.zone/@envs)
+* pb          - command line pastebin - see https://envs.sh and man pb
+* twtxt       - minimalist microblogging service - see twtxt --help
+* todo-txt    - simple todo managing
+* burrow      - manage your gopherhole - try burrow -h to see the options
+* hole        - open our envs.net gopherhole
+* feels       - ttbp feels engine
+                post to local feels, somewhere on your site, or gopher
+  or bb       - bashblog - see https://help.envs.net/blog/#with-bashblog
+* botany      - tend to your plants and visit teammates' gardens
+* sl          - spacelaunch: check sl -h for more info
+* dcss        - connect to crawl.tildeverse.org with ssh to play
+                dungeon crawl: stone soup
 
 for more information, check out:
   * man envs.net
