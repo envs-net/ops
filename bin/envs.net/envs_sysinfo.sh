@@ -320,8 +320,7 @@ include 'header.php';
     <div id="main" style="padding-bottom: 4em;">
 <div class="block">
 <h1><em>sysinfo</em></h1>
-<pre>
-
+<pre class="bottom">
 <em>full data source: <a href="/sysinfo.json">https://$DOMAIN/sysinfo.json</a></em>
 <em>webserver stats: <a href="/stats/">https://$DOMAIN/stats/</a></em>
 
