@@ -131,7 +131,7 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://pad.envs.net/"
       },
       "getwtxt": {
-        "desc":        "a twtxt registry service",
+        "desc":        "microblogging - a twtxt registry service",
         "version":     "$(curl -s https://twtxt."$DOMAIN"/api/plain/version | sed 's/getwtxt v//')",
         "url":         "https://twtxt.envs.net/"
       },
@@ -145,6 +145,11 @@ cat<<EOM > "$TMP_JSON"
         "version":     "$(/usr/sbin/gophernicus -v | sed 's/Gophernicus\///' | awk '{print $1}')",
         "url":         "gopher://envs.net/"
       },
+      "ipinfo": {
+        "desc":        "ip address info",
+        "version":     "",
+        "url":         "https://ip.envs.net/"
+      }
       "jetforce": {
         "desc":        "an tcp server for the gemini protocol",
         "version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
@@ -156,7 +161,7 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://matrix.envs.net/"
       },
       "privatebin": {
-        "desc":        "a pastebin service",
+        "desc":        "a graphical pastebin",
         "version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed '$ s/*$//'")",
         "url":         "https://pb.envs.net/"
       },
@@ -171,7 +176,7 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://searx.envs.net/"
       },
       "termbin": {
-        "desc":        "a command line pastebin",
+        "desc":        "netcat-based command line pastebin",
         "version":     "-",
         "url":         "https://tb.envs.net/"
       },
