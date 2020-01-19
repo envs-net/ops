@@ -171,7 +171,7 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://matrix.envs.net/"
       },
       "searx": {
-        "desc":        "privacy-respecting metasearch engine",
+        "desc":        "a privacy-respecting metasearch engine",
         "version":     "$(curl -s https://searx."$DOMAIN"/config | jq -Mr .version)",
         "url":         "https://searx.envs.net/"
       },
