@@ -278,7 +278,7 @@ print_category() {
     printf '<details><summary class="menu" id="%s"><strong>&#35; %s</strong></summary>\n' "$category" "${category//_/ }"
   fi
 
-  printf '<table id="table_pkg">\n'
+  printf '<table class="table_pkg">\n'
   printf '\t<tr> <th class="tw140">Package</th> <th class="tw280">Version</th> <th>Description</th> </tr>\n'
 
   if [ "$category" = 'services' ]; then
