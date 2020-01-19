@@ -279,7 +279,7 @@ print_category() {
   fi
 
   printf '<table id="table_pkg">\n'
-  printf '<tr> <th width="140px">Package</th> <th width="280px">Version</th> <th>Description</th></tr>\n'
+  printf '\t<tr> <th width="140px">Package</th> <th width="280px">Version</th> <th>Description</th></tr>\n'
 
   if [ "$category" = 'services' ]; then
     for pkg in "${arr[@]}"; do
