@@ -149,7 +149,7 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "ip address info",
         "version":     "",
         "url":         "https://ip.envs.net/"
-      }
+      },
       "jetforce": {
         "desc":        "an tcp server for the gemini protocol",
         "version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
