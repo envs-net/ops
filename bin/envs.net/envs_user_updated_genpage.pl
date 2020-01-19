@@ -27,8 +27,8 @@ include 'header.php';
 <br />
 </div>
 
-<pre>
-this is a static list of the pages modified in <code>/home/*/public_html/*</code>. it updates every hour.
+<pre>this is a static list of the pages modified in <code>/home/*/public_html/*</code>. it updates every hour.</pre>
+<br />
 <ul>\n";
 
 while (<>) {
@@ -43,7 +43,6 @@ while (<>) {
 };
 
 print "</ul>
-</pre>
 			</div>
 
 <?php include 'footer.php'; ?>";
