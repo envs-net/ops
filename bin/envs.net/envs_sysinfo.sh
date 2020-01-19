@@ -279,7 +279,7 @@ print_category() {
   fi
 
   printf '<table id="table_pkg">\n'
-  printf '\t<tr> <th width="140px">Package</th> <th width="280px">Version</th> <th>Description</th></tr>\n'
+  printf '\t<tr> <th class="tw140">Package</th> <th class="tw280">Version</th> <th>Description</th> </tr>\n'
 
   if [ "$category" = 'services' ]; then
     for pkg in "${arr[@]}"; do
@@ -319,8 +319,8 @@ include 'header.php';
 
     <div id="main" style="padding-bottom: 4em;">
 <div class="block">
-<pre>
 <h1><em>sysinfo</em></h1>
+<pre>
 
 <em>full data source: <a href="/sysinfo.json">https://$DOMAIN/sysinfo.json</a></em>
 <em>webserver stats: <a href="/stats/">https://$DOMAIN/stats/</a></em>
@@ -334,8 +334,9 @@ this is a static list of the package informations. it updates once per day.
 
 <strong>&#35; can i get [package] installed?</strong>
 probably! send an email with your suggestion to <a href="mailto:sudoers@$DOMAIN">sudoers@$DOMAIN</a>.
+
 </pre>
-<br />
+
 $(print_category 'services' "${sorted_services[@]}")
 <p></p>
 $(print_category 'shells' "${sorted_shells[@]}")

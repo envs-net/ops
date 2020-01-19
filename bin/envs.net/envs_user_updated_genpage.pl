@@ -23,9 +23,8 @@ include 'header.php';
 
 			<div id=\"main\">
 <div class=\"block\">
-<pre>
 <h1><em>recently user updates</em></h1>
-</pre>
+<br />
 </div>
 
 <pre>
