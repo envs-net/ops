@@ -249,7 +249,7 @@ print_pkg_info() {
   # string to lowercase
   pkg_desc="${pkg_desc,,}"
 
-  printf '\t<tr> <td>%s</td> <td>%s</td> <td>%s</td> </tr>\n' "$pkg" "$pkg_version" "$pkg_desc"
+  printf '\t\t<tr> <td>%s</td> <td>%s</td> <td>%s</td> </tr>\n' "$pkg" "$pkg_version" "$pkg_desc"
 }
 
 print_pkg_info_services() {
@@ -264,7 +264,7 @@ print_pkg_info_services() {
   local s_url
   s_url="$(jq -Mr '.data.services."'"$pkg"'".url|select (.!=null)' "$JSON_FILE")"
 
-  printf '\t<tr> <td><a href="%s" target="_blank">%s</a></td> <td>%s</td> <td>%s</td> </tr>\n' "$s_url" "$pkg" "$pkg_version" "$pkg_desc"
+  printf '\t\t<tr> <td><a href="%s" target="_blank">%s</a></td> <td>%s</td> <td>%s</td> </tr>\n' "$s_url" "$pkg" "$pkg_version" "$pkg_desc"
 }
 
 print_category() {
@@ -278,8 +278,8 @@ print_category() {
     printf '<details><summary class="menu" id="%s"><strong>&#35; %s</strong></summary>\n' "$category" "${category//_/ }"
   fi
 
-  printf '<table class="table_pkg">\n'
-  printf '\t<tr> <th class="tw140">Package</th> <th class="tw280">Version</th> <th>Description</th> </tr>\n'
+  printf '\t<table class="table_pkg">\n'
+  printf '\t\t<tr> <th class="tw140">Package</th> <th class="tw280">Version</th> <th>Description</th> </tr>\n'
 
   if [ "$category" = 'services' ]; then
     for pkg in "${arr[@]}"; do
@@ -296,7 +296,7 @@ print_category() {
     for pkg in "${arr[@]}"; do print_pkg_info "$pkg"; done
   fi
 
-  printf '</table></details>\n'
+  printf '\t</table>\n</details>\n<p></p>\n'
 }
 
 
@@ -338,17 +338,11 @@ probably! send an email with your suggestion to <a href="mailto:sudoers@$DOMAIN"
 </pre>
 
 $(print_category 'services' "${sorted_services[@]}")
-<p></p>
 $(print_category 'shells' "${sorted_shells[@]}")
-<p></p>
 $(print_category 'editors' "${sorted_editors[@]}")
-<p></p>
 $(print_category 'online_browser_and_clients' "${sorted_inet_clients[@]}")
-<p></p>
 $(print_category 'coding_packages' "${sorted_coding_pkg[@]}")
-<p></p>
 $(print_category 'coding_tools' "${sorted_coding_tools[@]}")
-<p></p>
 $(print_category 'misc' "${sorted_misc[@]}")
     </div>
 
