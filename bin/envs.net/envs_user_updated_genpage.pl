@@ -24,7 +24,7 @@ include 'header.php';
 			<div id=\"main\">
 <div class=\"block\">
 <h1><em>recently user updates</em></h1>
-<ṕ></p>
+<p></p>
 </div>
 
 <pre>this is a static list of the pages modified in <code>/home/*/public_html/*</code>. it updates every hour.</pre>
