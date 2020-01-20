@@ -317,15 +317,16 @@ include 'header.php';
     <pre class="clean"><strong><a href="/">&lt; back</a></strong></pre>
     </div>
 
-    <div id="main" style="padding-bottom: 4em;">
+    <div id="main">
 <div class="block">
 <h1><em>sysinfo</em></h1>
-<pre class="bottom">
+<pre>
 <em>full data source: <a href="/sysinfo.json">https://$DOMAIN/sysinfo.json</a></em>
 <em>webserver stats: <a href="/stats/">https://$DOMAIN/stats/</a></em>
 
 <em>server admin: <a href="/~creme/">&#126;creme</a></em>
 </pre>
+<p></p>
 </div>
 
 <pre>

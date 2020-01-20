@@ -21,10 +21,10 @@ include 'header.php';
 				<pre class=\"clean\"><strong><a href=\"/\">&lt; back</a></strong></pre>
 			</div>
 
-			<div id=\"main\" style=\"padding-bottom: 4em;\">
+			<div id=\"main\">
 <div class=\"block\">
 <h1><em>recently user updates</em></h1>
-<br />
+<ṕ></p>
 </div>
 
 <pre>this is a static list of the pages modified in <code>/home/*/public_html/*</code>. it updates every hour.</pre>
