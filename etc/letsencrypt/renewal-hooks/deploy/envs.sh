@@ -21,6 +21,9 @@ for domain in $RENEWED_DOMAINS; do
 			chown 108:0 "$matrix_dir"/*.pem
 			lxc-attach -n matrix -- bash -c "systemctl reload nginx ; systemctl restart matrix-synapse coturn"
 
+			# pleroma
+			lxc-attach -n pleroma -- bash -c "systemctl reload nginx"
+
 			# mail
 			lxc-attach -n mail -- bash -c "systemctl reload nginx postfix dovecot"
 			# mailinglists
