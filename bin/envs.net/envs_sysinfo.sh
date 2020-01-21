@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad getwtxt gitea gophernicus jetforce mariadb-server matrix nginx openssh-server
+services=(0x0 bbj cryptpad getwtxt gitea gophernicus jetforce mariadb-server matrix nginx openssh-server pleroma
     privatebin riot-web searx termbin tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -159,6 +159,11 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "an open network for secure, decentralized communication",
         "version":     "$(curl -s https://matrix."$DOMAIN"/_synapse/admin/v1/server_version | jq -Mr .server_version)",
         "url":         "https://matrix.envs.net/"
+      },
+      "pleroma": {
+        "desc":        "microblogging - federated social network",
+        "version":     "$(curl -s https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
+        "url":         "https://pleroma.envs.net/"
       },
       "privatebin": {
         "desc":        "a graphical pastebin",
