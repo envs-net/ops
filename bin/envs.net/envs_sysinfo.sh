@@ -157,7 +157,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "matrix": {
         "desc":        "an open network for secure, decentralized communication",
-        "version":     "$(curl -s https://matrix."$DOMAIN"/_synapse/admin/v1/server_version | jq -Mr .server_version)",
+        "version":     "$(curl -s https://matrix."$DOMAIN"/_matrix/federation/v1/version | jq -Mr .server.version)",
         "url":         "https://matrix.envs.net/"
       },
       "pleroma": {
