@@ -131,7 +131,7 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://pad.envs.net/"
       },
       "getwtxt": {
-        "desc":        "microblogging - a twtxt registry service",
+        "desc":        "a twtxt registry service - microblogging for hackers",
         "version":     "$(curl -s https://twtxt."$DOMAIN"/api/plain/version | sed 's/getwtxt v//')",
         "url":         "https://twtxt.envs.net/"
       },
@@ -161,7 +161,7 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://matrix.envs.net/"
       },
       "pleroma": {
-        "desc":        "microblogging - federated social network",
+        "desc":        "federated social network - microblogging",
         "version":     "$(curl -s https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
         "url":         "https://pleroma.envs.net/"
       },
