@@ -14,8 +14,8 @@ cool things to do while you're here on envs.net:
 * who         - see who else is connected right now
 * finger      - get info on other users (local and remote)
 * envs        - manage your users_info.json entrys and user-submitted scripts
-* envs_toot   - submit a post to the official envs.net mastodon account
-                (https://tilde.zone/@envs)
+* envs_toot   - submit a post to the official envs.net pleroma account
+                (https://pleroma.envs.net/@envs)
 * pb          - command line pastebin - see https://envs.sh and man pb
 * twtxt       - minimalist microblogging service - see twtxt --help
 * todo-txt    - simple todo managing
