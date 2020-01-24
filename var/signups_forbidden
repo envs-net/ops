@@ -9,6 +9,7 @@ bitbot
 broadcasthost
 cloud
 dev
+devuser
 ennik
 envs
 forum
@@ -27,14 +28,17 @@ localhost
 lounge
 linux
 mail
+manager
 mailer-daemon
 marketing
 marketting
+mastodon
 mis
 news
 nobody
 noc
 noreply
+pleroma
 pop
 pop3
 postmaster
@@ -44,6 +48,7 @@ root
 rss
 sales
 security
+service
 services
 smtp
 ssladmin
@@ -55,6 +60,7 @@ sysadmin
 team
 tilde
 twtxt
+toot
 town
 usenet
 uucp
