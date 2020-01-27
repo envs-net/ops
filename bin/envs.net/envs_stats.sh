@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-[ "(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
+[ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
 test ! -f /var/www/envs.net/stats/ && mkdir -p /var/www/envs.net/stats/
 
@@ -12,6 +12,7 @@ test ! -f /var/www/envs.net/stats/ && mkdir -p /var/www/envs.net/stats/
 	-o /var/www/envs.net/stats/index.html \
 	--ignore-panel=HOSTS \
 	--ignore-panel=KEYPHRASES \
-	--log-format=VCOMBINED -
+	--log-format=VCOMBINED - \
+	--html-prefs='{"theme":"darkGray"}'
 
 exit 0
