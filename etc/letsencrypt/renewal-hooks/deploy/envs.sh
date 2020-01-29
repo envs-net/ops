@@ -19,13 +19,15 @@ for domain in $RENEWED_DOMAINS; do
 			cp "$daemon_cert_root/fullchain.pem" "$matrix_dir"/
 			chmod 600 "$matrix_dir"/*.pem
 			chown 108:0 "$matrix_dir"/*.pem
-			lxc-attach -n matrix -- bash -c "systemctl reload nginx ; systemctl restart matrix-synapse coturn"
+			lxc-attach -n matrix -- bash -c "systemctl reload nginx ; systemctl restart coturn"
 
 			# pleroma
 			lxc-attach -n pleroma -- bash -c "systemctl reload nginx"
 
 			# mail
-			lxc-attach -n mail -- bash -c "systemctl reload nginx postfix dovecot"
+			# has a own letencrypt cert in container!
+			##lxc-attach -n mail -- bash -c "systemctl reload nginx postfix dovecot"
+
 			# mailinglists
 			lxc-attach -n lists -- bash -c "systemctl reload nginx postfix"
 
