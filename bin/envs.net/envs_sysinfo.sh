@@ -11,8 +11,8 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad getwtxt gitea gophernicus jetforce mariadb-server matrix nginx openssh-server pleroma
-    privatebin riot-web searx termbin tt-rss thelounge znc)
+services=(0x0 bbj cryptpad getwtxt gitea gophernicus halcyon jetforce mariadb-server matrix nginx openssh-server
+    pleroma privatebin riot-web searx termbin tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -144,6 +144,11 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "a modern full-featured (and hopefully) secure gopher daemon",
         "version":     "$(/usr/sbin/gophernicus -v | sed 's/Gophernicus\///' | awk '{print $1}')",
         "url":         "gopher://envs.net/"
+      },
+      "halcyon": {
+        "desc":        "a webclient for mastodon and pleroma which looks like twitter",
+        "version":     "$(cat /var/lib/lxc/pleroma/rootfs/var/www/halcyon/version.txt)",
+        "url":         "https://halcyon.envs.net/"
       },
       "ipinfo": {
         "desc":        "ip address info",
