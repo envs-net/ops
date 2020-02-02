@@ -1,0 +1,3 @@
+#!/bin/sh
+
+python3 /opt/services/linkulator2/linkulator.py "$@"
