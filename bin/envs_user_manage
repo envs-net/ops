@@ -3,7 +3,6 @@
 domain='envs.net'
 short_dom="$(echo $domain | awk -F. '{printf $1}')"
 
-
 cmd="$1"
 user="$2"
 mailTo="$3"
@@ -24,7 +23,7 @@ head_def="$head_mime\r\n$head_type"
 
 send_db_mail() {
 	db_type="$1"
-	db_sub="Subject: database on envs created"
+	db_sub="Subject: envs - database readme"
 	db_mail="$head_def\r\nTo: $user@$domain\r\nFrom: sudoers@$domain\r\n$db_sub"
 
 	echo -e "$db_mail\r\n$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/g -e s/_sql_/"$db_type"/g /usr/local/bin/envs.net/database-email.tmpl)" \
@@ -96,10 +95,6 @@ add_user() {
 	chmod 644 /home/"$user"/.ssh/authorized_keys
 	chown -R "$user":"$short_dom" /home/"$user"/.ssh
 
-	# setup database
-	#add_user_mysql_db
-	#add_user_pgsql_db
-
 	# setup email mailbox
 	lxc-attach -n mail -- bash -c "/usr/local/bin/coreapi action accounts create \
 		-p username=$user@$domain -p role=SimpleUsers -p language=en \
@@ -132,6 +127,10 @@ add_user() {
 	echo -e "$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /home/"$user"/.muttrc)" > /home/"$user"/.muttrc
 	chmod go-r /home/"$user"/.muttrc
 	printf '\n~%s\n' "$user" > /home/"$user"/.mutt/signature
+
+	# setup database
+	#add_user_mysql_db
+	#add_user_pgsql_db
 
 	# setup znc account (only after request..)
 	#sudo -u znc pkill -SIGUSR1 znc && pkill znc
