@@ -1,24 +1,17 @@
 #!/usr/bin/env bash
 #
-# envs.net - generate user_updates.php and users_info.json
-# - this script is called by /etc/cron.d/envs_sysinfo
+# envs.net - generate the following static sites
+#   - users_info.json
+#   - user_updates.php
+#   - gemini index.gmi
+#
+# this script is called by /etc/cron.d/envs_sysinfo
 #
 WWW_PATH='/var/www/envs.net'
 DOMAIN="envs.net"
 
 
 [ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
-
-#
-# user_updates.php
-#
-
-LIST="$(stat --format=%Z\ %n /home/*/public_html/* | grep -v updated | grep -v your_index_template.php | grep -v cgi-bin | sort -r)"
-echo "$LIST" | perl /usr/local/bin/envs.net/envs_user_updated_genpage.pl > /tmp/user_updates.php_tmp
-
-mv /tmp/user_updates.php_tmp "$WWW_PATH"/user_updates.php
-chown root:www-data "$WWW_PATH"/user_updates.php
-
 
 #
 # users_info.json
@@ -227,6 +220,25 @@ EOM
 
 mv "$TMP_JSON" "$WWW_PATH"/users_info.json
 chown root:www-data "$WWW_PATH"/users_info.json
+
+
+#
+# user_updates.php
+#
+
+LIST="$(stat --format=%Z\ %n /home/*/public_html/* | grep -v updated | grep -v your_index_template.php | grep -v cgi-bin | sort -r)"
+echo "$LIST" | perl /usr/local/bin/envs.net/envs_user_updated_genpage.pl > /tmp/user_updates.php_tmp
+
+mv /tmp/user_updates.php_tmp "$WWW_PATH"/user_updates.php
+chown root:www-data "$WWW_PATH"/user_updates.php
+
+
+#
+# gemini index.gmi
+#
+
+/usr/local/bin/envs.net/envs_gemini_genpage.sh
+
 
 #
 exit 0

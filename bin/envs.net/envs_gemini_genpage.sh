@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # envs.net - generate index.gmi
-# - this script is called by /etc/cron.d/envs_gemini
+# - this script is called by /usr/local/bin/envs.net/envs_user_updated.sh
 #
 
 [ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
