@@ -9,18 +9,17 @@ cool things to do while you're here on envs.net:
 * gomuks      - a terminal based matrix client written in go
 * neomutt     - default @envs.net command line mail client
 * clinte      - community notices system
-* bbj         - forum - command line bbs (bulletin butter and jelly)
-* linkulator  - a link aggregator for the shell
+* bbj         - forum - command line bbs ( bulletin butter and jelly )
+* linkulator  - a link aggregator - gopher://envs.net/1/linkulator/
 * who         - see who else is connected right now
 * finger      - get info on other users (local and remote)
 * envs        - manage your users_info.json entrys and user-submitted scripts
-* envs_toot   - submit a post to the official envs.net pleroma account
-                (https://pleroma.envs.net/@envs)
 * pb          - command line pastebin - see https://envs.sh and man pb
 * twtxt       - minimalist microblogging service - see twtxt --help
 * todo-txt    - simple todo managing
 * burrow      - manage your gopherhole - try burrow -h to see the options
 * hole        - open our envs.net gopherhole
+* toot        - a command-line mastodon client
 * feels       - ttbp feels engine
                 post to local feels, somewhere on your site, or gopher
   or bb       - bashblog - see https://help.envs.net/blog/#with-bashblog

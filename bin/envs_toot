@@ -1,5 +1,9 @@
 #!/usr/bin/env sh
 
+if [ "$(id -u)" -ne 0 ] || [ "$(id -u)" -ne 10000 ]; then
+	printf 'sorry only root and creme can toot as envs.\n' && exit 1
+fi
+
 print_usage() {
 	printf 'usage: envs_toot "your message"\n\n'
 	printf 'sample output:\nusername | your message\n'
