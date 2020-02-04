@@ -4,13 +4,13 @@ cat << EOM
 
 cool things to do while you're here on envs.net:
 
-* weechat     - talk to other cool people on irc
+* weechat     - the extensible chat client
 * webirc      - add your webchat account for our thelounge
+* gomuks      - a terminal based matrix client written in go
 * neomutt     - default @envs.net command line mail client
 * clinte      - community notices system
 * bbj         - forum - command line bbs (bulletin butter and jelly)
 * linkulator  - a link aggregator for the shell
-* talk        - old school chat utility (man talk for more info)
 * who         - see who else is connected right now
 * finger      - get info on other users (local and remote)
 * envs        - manage your users_info.json entrys and user-submitted scripts
