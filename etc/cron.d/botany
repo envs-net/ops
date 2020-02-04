@@ -1,4 +1,4 @@
 SHELL=/bin/sh
 PATH=/usr/bin:/opt/services
 
-0 0 * * 0	services  python /opt/services/botany/clear_weekly_users.py >/dev/null 2>&1
+3 0 * * 0	services  python /opt/services/botany/clear_weekly_users.py >/dev/null 2>&1

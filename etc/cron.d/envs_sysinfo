@@ -1,7 +1,7 @@
 #
-# generate sysinfo.json and sysinfo.php every day
+# generate sysinfo.json and sysinfo.php once per day
 #
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-0 0 * * * root /usr/local/bin/envs.net/envs_sysinfo.sh >/dev/null 2>&1
+1 0 * * * root /usr/local/bin/envs.net/envs_sysinfo.sh >/dev/null 2>&1
