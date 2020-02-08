@@ -127,12 +127,12 @@ cat<<EOM > "$TMP_JSON"
       },
       "cryptpad": {
         "desc":        "collaborative real time editing",
-        "version":     "$(curl -s https://pad."$DOMAIN"/api/config | awk '/ver=/ {print $2}' | sed -e 's/"ver=//' -e '$ s/"$//')",
+        "version":     "$(curl -fs https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
         "url":         "https://pad.envs.net/"
       },
       "getwtxt": {
         "desc":        "a twtxt registry service - microblogging for hackers",
-        "version":     "$(curl -s https://twtxt."$DOMAIN"/api/plain/version | sed 's/getwtxt v//')",
+        "version":     "$(curl -fs https://twtxt."$DOMAIN"/api/plain/version | awk -Fv '{print $2}')",
         "url":         "https://twtxt.envs.net/"
       },
       "gitea": {
@@ -162,12 +162,12 @@ cat<<EOM > "$TMP_JSON"
       },
       "matrix": {
         "desc":        "an open network for secure, decentralized communication",
-        "version":     "$(curl -s https://matrix."$DOMAIN"/_matrix/federation/v1/version | jq -Mr .server.version)",
+        "version":     "$(curl -fs https://matrix."$DOMAIN"/_matrix/federation/v1/version | jq -Mr .server.version)",
         "url":         "https://matrix.envs.net/"
       },
       "pleroma": {
         "desc":        "federated social network - microblogging",
-        "version":     "$(curl -s https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
+        "version":     "$(curl -fs https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
         "url":         "https://pleroma.envs.net/"
       },
       "privatebin": {
@@ -182,7 +182,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "searx": {
         "desc":        "a privacy-respecting metasearch engine",
-        "version":     "$(curl -s https://searx."$DOMAIN"/config | jq -Mr .version)",
+        "version":     "$(curl -fs https://searx."$DOMAIN"/config | jq -Mr .version)",
         "url":         "https://searx.envs.net/"
       },
       "termbin": {
@@ -192,7 +192,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "thelounge": {
         "desc":        "a self-hosted web irc client",
-        "version":     "$(sudo -u thelounge /srv/thelounge/.yarn/bin/thelounge -v | sed 's/v//')",
+        "version":     "$(sudo -u thelounge /srv/thelounge/.yarn/bin/thelounge -v | awk -Fv '{print $2}')",
         "url":         "https://webirc.envs.net/"
       },
       "tt-rss": {
@@ -209,10 +209,10 @@ cat<<EOM > "$TMP_JSON"
     "packages": {
       "av98":         "$(/usr/local/bin/av98 --version | awk '{print $2}')",
       "bombadillo":   "$(/usr/local/bin/bombadillo -v | awk '/Bombadillo/ {print $2}')",
-      "burrow":       "$(/usr/local/bin/burrow -v | sed 's/v//')",
+      "burrow":       "$(/usr/local/bin/burrow -v | awk -Fv '{print $2}')",
       "clinte":       "$(/usr/local/bin/clinte -V | awk '/clinte/ {print $2}')",
       "gfu":          "$(/usr/local/bin/gfu -v | sed '/version/s/.*version \([^ ][^ ]*\)[ ]*.*/\1/')",
-      "go":           "$(sed 's/go//' /usr/local/go/VERSION)",
+      "go":           "$(awk -Fgo '{print $2}' /usr/local/go/VERSION)",
       "goaccess":     "$(/usr/bin/goaccess -V | awk '/GoAccess/ {print $3}')",
       "meli":         "$(/usr/local/bin/meli --version | awk '/meli/ {printf $2}')",
       "micro":        "$(/usr/local/bin/micro -version | awk '/Version/ {print $2}')",
