@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
-[[ "$EUID" -ne 0 ]] && printf 'Please run as root!\n' && exit 1
+[ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
 ###
+
 export RESTIC_PASSWORD=';)'
 
 restic='ionice -c0 nice -n-19 restic -r'
 rsync='rsync -av --delete --numeric-ids'
+
 ###
 
 # LOCAL
@@ -23,7 +25,7 @@ REMOTE_DIR="$(hostname)"
 
 BACKUP_LXC_FULL=''
 
-#RESTIC_LOC_NAME='system lxc'
+##RESTIC_LOC_NAME='system lxc'
 RESTIC_LOC_NAME='system'
 
 ###
@@ -33,7 +35,7 @@ DATE="$(date +%Y%m%d)"
 ### INITIAL Restic Sync ###
 for BH in $BACKUP_HOST; do
 	for RLN in $RESTIC_LOC_NAME; do
-		ssh -q "$BH" [[ ! -d "$REMOTE_DIR"_"$RLN" ]] && restic -r sftp:"$BH":"$REMOTE_DIR"_"$RLN" init
+		ssh -q "$BH" [ ! -d "$REMOTE_DIR"_"$RLN" ] && restic -r sftp:"$BH":"$REMOTE_DIR"_"$RLN" init
 	done
 done
 
@@ -65,13 +67,23 @@ fi
 #
 
 # Backup local mysql
-mysqldump -u root --opt --order-by-primary --all-databases | gzip -c > "$BACKUP_DIR"_local/mysql-dump-$(date +%F.%H%M%S).gz
-find "$BACKUP_DIR"_local/mysql-dump-*.gz -maxdepth 1 -type f -mtime +3 -delete
+mysqldump -u root --opt --order-by-primary --all-databases | gzip -c > /var/db-backups/mysql-dump-$(date +%F.%H%M%S).gz
 
-# Backup getwtxt
+# Backup local pgsql
+## TODO
+#pg_dumpall -U postgres | gzip -c > /var/db-backups/pgsql-dump-$(date +%F.%H%M%S).gz
 
-# Backup bbj
+# Backup git
+lxc-attach -n gitea -- bash -c "sudo -Hiu git /usr/local/bin/gitea dump -c /etc/gitea/app.ini"
 
+# Backup matrix
+lxc-attach -n matrix -- bash -c "sudo -Hiu postgres pg_dump -F t matrix > /var/db-backups/matrix.tar"
+
+# Backup pleroma
+lxc-attach -n pleroma -- bash -c "sudo -Hiu postgres pg_dump -F t pleroma > /var/db-backups/pleroma.tar"
+
+# Backup ttrss
+lxc-attach -n rss -- bash -c "mysqldump -u root ttrss | gzip -c > /var/db-backups/ttrss.gz"
 
 ###
 
@@ -82,27 +94,41 @@ sleep 10
 #
 
 dpkg --get-selections | tee "$BACKUP_DIR"_local/pkg.list &>/dev/null
-cp -R /etc/apt/sources.list* "$BACKUP_DIR"_local/
+cp -r /etc/apt/sources.list* "$BACKUP_DIR"_local/
 apt-key exportall | tee "$BACKUP_DIR"_local/repo.keys &>/dev/null
 
 #
 # Restic Backups
+#
+lp='/var/lib/lxc/**/rootfs'
+exclude_lxc="$lp/dev,$lp/media,$lp/mnt,$lp/proc,$lp/run,$lp/sys,$lp/tmp,$lp/var/tmp"
+
 for BH in $BACKUP_HOST; do
-	$restic sftp:"$BH":"$REMOTE_DIR"_system backup / --exclude={/dev,/media,/mnt,/proc,/run,/sys,/tmp,/var/tmp,/var/lib/lxcfs/cgroup,/data/tmp,/data/BACKUP,/data/BACKUP_LXC,/root/.cache/}
-#	$restic sftp:"$BH":"$REMOTE_DIR"_lxc backup "$BACKUP_DIR_LXC"
+	$restic sftp:"$BH":"$REMOTE_DIR"_system backup / --exclude={/dev,/media,/mnt,/proc,/run,/sys,/tmp,/root/.cache/,/var/tmp,/var/lib/lxcfs/cgroup,/data/tmp,/data/BACKUP,/data/BACKUP_LXC,$exclude_lxc}
+##	$restic sftp:"$BH":"$REMOTE_DIR"_lxc backup "$BACKUP_DIR_LXC"
 done
 
 
+#
 # clear old Backups
+# remote
 CHECKEOM="$(date --date=tomorrow +%d)"
 if [ "$CHECKEOM" -eq 01 ]; then
 	for BH in $BACKUP_HOST; do
 		for RLN in $RESTIC_LOC_NAME; do
-			restic -r sftp:"$BH":"$REMOTE_DIR"_"$RLN" forget --keep-daily 7 --keep-weekly 8 --keep-monthly 24
+			restic -r sftp:"$BH":"$REMOTE_DIR"_"$RLN" forget --keep-daily 1 --keep-weekly 4 --keep-monthly 3
 			restic -r sftp:"$BH":"$REMOTE_DIR"_"$RLN" prune
 		done
 	done
 fi
+
+# local
+rm -f /var/db-backups/mysql-dump*.gz
+#rm -f /var/db-backups/pgsql-dump*.gz
+rm -f /var/lib/lxc/gitea/rootfs/srv/git/gitea-dump*.zip
+rm -f /var/lib/lxc/matrix/rootfs/var/db-backups/matrix.tar
+rm -f /var/lib/lxc/pleroma/rootfs/var/db-backups/pleroma.tar
+rm -f /var/lib/lxc/rss/rootfs/var/db-backups/ttrss.gz
 
 #
 exit 0
