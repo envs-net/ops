@@ -17,7 +17,7 @@ for domain in $RENEWED_DOMAINS; do
 			cp "$daemon_cert_root/privkey.pem" "$matrix_dir"/
 			cp "$daemon_cert_root/chain.pem" "$matrix_dir"/
 			cp "$daemon_cert_root/fullchain.pem" "$matrix_dir"/
-			chmod 600 "$matrix_dir"/*.pem
+			chmod 644 "$matrix_dir"/*.pem
 			chown 108:0 "$matrix_dir"/*.pem
 			lxc-attach -n matrix -- bash -c "systemctl reload nginx ; systemctl restart coturn"
 
