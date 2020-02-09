@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 
+declare -a verify_id=('0' '10000')
+
 print_usage() {
 	printf 'usage: envs_toot "your message"\n\n'
 	printf 'sample output:\nusername | your message\n'
 	exit 1
 }
 
-if [ "$(id -u)" -eq 0 ] || [ "$(id -u)" -eq 10000 ] ; then
+printf 'mastodon-toot as envs.net\n\n'
 
-	printf 'mastodon-toot as envs.net\n\n'
-
+if printf '%s\n' "${verify_id[@]}" | grep -q -P ^"$(id -u)"$; then
 	if [ "$1" = '-h' ] || [ "$1" = '--help' ] || [ "$1" = '?' ]; then
 		print_usage
 	elif [ -n "$1" ] && [ -z "$2" ]; then
@@ -17,7 +18,6 @@ if [ "$(id -u)" -eq 0 ] || [ "$(id -u)" -eq 10000 ] ; then
 	else
 		print_usage
 	fi
-
 else
 	printf 'sorry only root and creme can toot as envs.\n' && exit 1
 fi
