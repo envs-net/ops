@@ -57,7 +57,6 @@ custom_pkg_desc() {
     gfu)         pkg_desc='A utility for formatting gophermaps';;
     go)          pkg_desc='tool for managing Go source code';;
     goaccess)    pkg_desc='fast web log analyzer and interactive viewer';;
-    meli)        pkg_desc='terminal mail user agent';;
     micro)       pkg_desc='a new modern terminal-based text editor';;
     pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
     twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
@@ -214,7 +213,6 @@ cat<<EOM > "$TMP_JSON"
       "gfu":          "$(/usr/local/bin/gfu -v | sed '/version/s/.*version \([^ ][^ ]*\)[ ]*.*/\1/')",
       "go":           "$(awk -Fgo '{print $2}' /usr/local/go/VERSION)",
       "goaccess":     "$(/usr/bin/goaccess -V | awk '/GoAccess/ {print $3}')",
-      "meli":         "$(/usr/local/bin/meli --version | awk '/meli/ {printf $2}')",
       "micro":        "$(/usr/local/bin/micro -version | awk '/Version/ {print $2}')",
       "pb":           "$(/usr/local/bin/pb -v)",
       "twtxt":        "$(/usr/local/bin/twtxt --version | awk '/version/ {printf $3}')",
