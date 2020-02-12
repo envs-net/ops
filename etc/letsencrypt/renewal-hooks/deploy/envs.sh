@@ -45,7 +45,7 @@ for domain in $RENEWED_DOMAINS; do
 
 			# privatebin
 			lxc-attach -n pb -- bash -c "systemctl restart apache2"
-			;;
+		;;
 
 		envs.sh)
 			daemon_cert_root=/opt/lxc_ssl/envs.sh
@@ -56,7 +56,7 @@ for domain in $RENEWED_DOMAINS; do
 			cat /etc/ssl/certs/envs_dhparam.pem > "$daemon_cert_root/envs_dhparam.pem"
 			# 0x0 / fiche
 			lxc-attach -n null -- bash -c "systemctl reload nginx"
-			;;
+		;;
 
 		znc.envs.net)
 			daemon_cert_root=/srv/znc/.znc
@@ -67,7 +67,7 @@ for domain in $RENEWED_DOMAINS; do
 			chown znc "$daemon_cert_root/znc.pem"
 			chmod 600 "$daemon_cert_root/znc.pem"
 			systemctl restart znc
-			;;
+		;;
 
 	esac
 done
