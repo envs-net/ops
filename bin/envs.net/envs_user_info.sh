@@ -192,10 +192,9 @@ EOM
               fi
             fi
           done
-        fi
+
 # ssh
-        # only print ssh-pubkey if user has enabled
-        if [ -f "$INFO_FILE" ]; then
+          # only print ssh-pubkey if user has enabled
           ssh_pubkey="$(sed -n '/^ssh_pubkey=/{s#^.*=##;p}' "$INFO_FILE")"
           if [[ "$ssh_pubkey" =~ [yY1] ]]; then
             cat << EOM >> "$TMP_JSON"
@@ -214,6 +213,7 @@ EOM
             # remove trailing ',' (no ssh-pubkey print out)
             clear_lastline
           fi
+## if line 118
         else
           # no "$INFO_FILE" file
           # remove trailing ',' for the last user entry
