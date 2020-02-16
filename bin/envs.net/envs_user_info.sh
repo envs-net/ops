@@ -1,15 +1,14 @@
 #!/usr/bin/env bash
 #
-# envs.net - generate the following static sites
+# envs.net - this script generates the following static sites
 #   - users_info.json
 #   - user_updates.php
-#   - gemini index.gmi
+#   - gemini's index.gmi
 #
-# this script is called by /etc/cron.d/envs_sysinfo
+# this script is called by /etc/cron.d/envs_user_info
 #
 WWW_PATH='/var/www/envs.net'
 DOMAIN="envs.net"
-
 
 [ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
@@ -17,6 +16,8 @@ DOMAIN="envs.net"
 # users_info.json
 #
 TMP_JSON='/tmp/users_info.json_tmp'
+
+clear_lastline() { sed -i '$ s/,$//' "$TMP_JSON" ; }
 
 cat << EOM > "$TMP_JSON"
 {
@@ -182,7 +183,7 @@ EOM
                   # end of user def. array
                   # remove trailing ',' on last user entry
                   unset field_in_progress
-                  sed -i '$ s/,$//' "$TMP_JSON"
+                  clear_lastline
                   cat << EOM >> "$TMP_JSON"
         ],
 EOM
@@ -192,24 +193,39 @@ EOM
           done
         fi
 # ssh
-        cat << EOM >> "$TMP_JSON"
+        # only print ssh-pubkey then user has enabled
+        if [ -f "$INFO_FILE" ]; then
+          ssh_pubkey="$(sed -n '/^ssh_pubkey=/{s#^.*=##;p}' "$INFO_FILE")"
+          case "$ssh_pubkey" in
+            y|Y|1 )
+              cat << EOM >> "$TMP_JSON"
         "ssh-pubkey": [
 EOM
-          while read -r LINE ; do
-            [[ "$LINE" == 'ssh'* ]] && printf '          "%s",\n' "$LINE" >> "$TMP_JSON"
-          done < "$USER_HOME"/.ssh/authorized_keys
-          # remove trailing ',' for the last pubkey
-          sed -i '$ s/,$//' "$TMP_JSON"
+              while read -r LINE ; do
+                [[ "$LINE" == 'ssh'* ]] && printf '          "%s",\n' "$LINE" >> "$TMP_JSON"
+              done < "$USER_HOME"/.ssh/authorized_keys
+              # remove trailing ',' for the last pubkey
+              clear_lastline
 
-        # close user ssh pubkey array ']' and user part. '},'
-        cat << EOM >> "$TMP_JSON"
+            # close user ssh pubkey array
+            cat << EOM >> "$TMP_JSON"
         ]
+EOM
+            ;;
+            *) clear_lastline ;;
+          esac
+        else
+          # remove trailing ',' for the last user entry
+          clear_lastline
+        fi
+        # close user part.
+        cat << EOM >> "$TMP_JSON"
       },
 EOM
 # EOF
     done
-    # remove trailing ',' on last user entry
-    sed -i '$ s/,$//' "$TMP_JSON"
+    # remove trailing ',' for last user
+    clear_lastline
 
     cat << EOM >> "$TMP_JSON"
     }
@@ -227,14 +243,14 @@ chown root:www-data "$WWW_PATH"/users_info.json
 #
 
 LIST="$(stat --format=%Z\ %n /home/*/public_html/* | grep -v updated | grep -v your_index_template.php | grep -v cgi-bin | sort -r)"
-echo "$LIST" | perl /usr/local/bin/envs.net/envs_user_updated_genpage.pl > /tmp/user_updates.php_tmp
+echo "$LIST" | perl /usr/local/bin/envs.net/envs_user_info_genpage.pl > /tmp/user_updates.php_tmp
 
 mv /tmp/user_updates.php_tmp "$WWW_PATH"/user_updates.php
 chown root:www-data "$WWW_PATH"/user_updates.php
 
 
 #
-# gemini index.gmi
+# gemini's index.gmi
 #
 
 /usr/local/bin/envs.net/envs_gemini_genpage.sh

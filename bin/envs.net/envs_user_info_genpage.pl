@@ -1,7 +1,8 @@
 #!/usr/bin/perl
 #
+# envs.net - this script generates the user_updates.php
 # source from pgadey (ctrl-c.club)
-# url: https://github.com/pgadey/bin/blob/master/ctrl-c.club
+# url: https://github.com/pgadey/bin/blob/master/ctrl-c.club/updated.pl
 #
 
 print "<?php

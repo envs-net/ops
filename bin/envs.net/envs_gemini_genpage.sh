@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 #
 # envs.net - generate index.gmi
-# - this script is called by /usr/local/bin/envs.net/envs_user_updated.sh
+# - this script is called by /usr/local/bin/envs.net/envs_user_info.sh
 #
 
 [ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
-###
 
 userlist() {
 	mapfile -t users < <(jq -Mr '.data.users|keys[]' /var/www/envs.net/users_info.json)
@@ -20,9 +19,6 @@ userlist() {
 	done
 }
 
-#
-# INDEX.GMI
-#
 cat << EOM >> /tmp/index.gmi_tmp
 welcome on envs.net - gemini
 $(figlet -f smslant envs.net)
@@ -36,7 +32,6 @@ we are linux lovers, sysadmins, programmer and users who like build
 webpages, write blogs, chat online, play cool console games and so much
 more. you wish to join with an small user space?
 
-join the team today!
 => https://envs.net/signup/ signup for a envs.net account (html)
 
 visit us in gopher and html lands for more info.

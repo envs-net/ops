@@ -1,8 +1,0 @@
-#
-# generate user_updates.php , users_info.json
-# (once per hour)
-#
-SHELL=/bin/sh
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-
-0 * * * * root /usr/local/bin/envs.net/envs_user_updated.sh >/dev/null 2>&1

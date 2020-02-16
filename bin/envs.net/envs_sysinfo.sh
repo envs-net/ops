@@ -43,7 +43,12 @@ misc=(aria2 bc busybox burrow byobu clinte gfu goaccess hugo jekyll mariadb-clie
     pandoc pelican screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 
-###
+
+#
+# SYSINFO.JSON
+#
+JSON_FILE="$WWW_PATH/sysinfo.json"
+TMP_JSON='/tmp/sysinfo.json_tmp'
 
 custom_pkg_desc() {
   local pkg="$1"
@@ -66,13 +71,6 @@ custom_pkg_desc() {
     zola)        pkg_desc='single-binary static site generator written in rust';;
   esac
 }
-
-
-#
-# SYSINFO.JSON
-#
-JSON_FILE="$WWW_PATH/sysinfo.json"
-TMP_JSON='/tmp/sysinfo.json_tmp'
 
 print_pkg_version() {
   local pkg_version
@@ -291,9 +289,8 @@ print_category() {
 
   if [ "$category" = 'services' ]; then
     for pkg in "${arr[@]}"; do
-      # check service is in json
+      # check service in sysinfo.json
       s_in_j="$(jq -Mr '.data.services."'"$pkg"'"|select (.!=null)' "$JSON_FILE")"
-
       if [ -n "$s_in_j" ]; then
         print_pkg_info_services "$pkg"
       else
