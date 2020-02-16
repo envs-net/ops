@@ -194,7 +194,7 @@ EOM
           done
         fi
 # ssh
-        # only print ssh-pubkey then user has enabled
+        # only print ssh-pubkey if user has enabled
         if [ -f "$INFO_FILE" ]; then
           ssh_pubkey="$(sed -n '/^ssh_pubkey=/{s#^.*=##;p}' "$INFO_FILE")"
           case "$ssh_pubkey" in
