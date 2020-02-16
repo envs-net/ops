@@ -197,25 +197,25 @@ EOM
         # only print ssh-pubkey if user has enabled
         if [ -f "$INFO_FILE" ]; then
           ssh_pubkey="$(sed -n '/^ssh_pubkey=/{s#^.*=##;p}' "$INFO_FILE")"
-          case "$ssh_pubkey" in
-            y|Y|1 )
-              cat << EOM >> "$TMP_JSON"
+          if [[ "$ssh_pubkey" =~ [yY1] ]]; then
+            cat << EOM >> "$TMP_JSON"
         "ssh-pubkey": [
 EOM
-              while read -r LINE ; do
-                [[ "$LINE" == 'ssh'* ]] && printf '          "%s",\n' "$LINE" >> "$TMP_JSON"
-              done < "$USER_HOME"/.ssh/authorized_keys
-              # remove trailing ',' for the last pubkey
-              clear_lastline
-
+            while read -r LINE ; do
+              [[ "$LINE" == 'ssh'* ]] && printf '          "%s",\n' "$LINE" >> "$TMP_JSON"
+            done < "$USER_HOME"/.ssh/authorized_keys
+            # remove trailing ',' for the last pubkey
+            clear_lastline
             # close user ssh pubkey array
             cat << EOM >> "$TMP_JSON"
         ]
 EOM
-            ;;
-            *) clear_lastline ;;
-          esac
+          else
+            # remove trailing ',' (no ssh-pubkey print out)
+            clear_lastline
+          fi
         else
+          # no "$INFO_FILE" file
           # remove trailing ',' for the last user entry
           clear_lastline
         fi
