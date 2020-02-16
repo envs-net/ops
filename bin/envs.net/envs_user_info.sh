@@ -125,7 +125,8 @@ EOM
 
           # check 'INFO_FILE' and add entrys to 'line_to_set' array
           while read -r LINE ; do
-            if [[ -n "$LINE" ]] && ! [[ "$LINE" = '#'* ]] && ! [[ "$LINE" = 'desc='* ]]; then
+            if [[ -n "$LINE" ]] && ! [[ "$LINE" = '#'* ]] \
+            && ! [[ "$LINE" = 'desc='* ]] && ! [[ "$LINE" = 'ssh_pubkey='* ]]; then
               user_field="${LINE//=*/}"
               user_value="${LINE//*=/}"
 
