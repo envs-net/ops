@@ -43,22 +43,22 @@ misc=(aria2 bc busybox burrow byobu clinte gfu goaccess hugo jekyll mariadb-clie
     pandoc pelican screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 
+#
+# do not add services!
+service_pkgs=(mariadb-server nginx openssh-server)
+FULL_PKG_LIST=("${service_pkgs[@]}" "${shells[@]}" "${editors[@]}" "${inet_clients[@]}" "${coding_pkg[@]}" "${coding_tools[@]}" "${misc[@]}")
 
-#
-# SYSINFO.JSON
-#
-JSON_FILE="$WWW_PATH/sysinfo.json"
-TMP_JSON='/tmp/sysinfo.json_tmp'
 
 custom_pkg_desc() {
   local pkg="$1"
   case "$pkg" in
     # packages
+    crystal)     pkg_desc='Compiler for the Crystal language';;
+    # custom packages
     av98)        pkg_desc='Command line gemini client. High speed, low drag';;
     bombadillo)  pkg_desc='Bombadillo is a non-web browser for the terminal';;
     burrow)      pkg_desc='a helper for building and managing a gopher hole';;
     clinte)      pkg_desc='a community notices system';;
-    crystal)     pkg_desc='Compiler for the Crystal language';;
     gfu)         pkg_desc='A utility for formatting gophermaps';;
     go)          pkg_desc='tool for managing Go source code';;
     goaccess)    pkg_desc='fast web log analyzer and interactive viewer';;
@@ -69,15 +69,29 @@ custom_pkg_desc() {
     vf1)         pkg_desc='Command line gopher client. High speed, low drag.';;
     vlang)       pkg_desc='Simple, fast, safe, compiled programming language';;
     zola)        pkg_desc='single-binary static site generator written in rust';;
+
+    *) _no_custom_pkg='1' ;;
   esac
 }
 
+
+#
+# SYSINFO.JSON
+#
+JSON_FILE="$WWW_PATH/sysinfo.json"
+TMP_JSON='/tmp/sysinfo.json_tmp'
+
 print_pkg_version() {
   local pkg_version
-  for pkg in $(dpkg-query -f '${binary:Package}\n' -W); do
-    pkg_version="$(dpkg-query -f '${Version}\n' -W "$pkg")"
+  #for pkg in $(dpkg-query -f '${binary:Package}\n' -W); do
+  for pkg in "${FULL_PKG_LIST[@]}"; do
+    _no_custom_pkg='0' ; custom_pkg_desc "$pkg"
 
-    printf '      "%s": "%s",\n' "$pkg" "$pkg_version"
+    if [ "$_no_custom_pkg" -eq '1' ] || [ "$pkg" = 'crystal' ]; then
+      pkg_version="$(dpkg-query -f '${Version}\n' -W "$pkg")"
+
+      printf '      "%s": "%s",\n' "$pkg" "$pkg_version"
+    fi
   done
 }
 
