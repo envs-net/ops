@@ -150,7 +150,7 @@ add_user() {
 	sudo -u services toot post "welcome new user ~$user"
 
 	# cleanup current signup
-	sed -i "/$user/d" /var/signups_current
+	sed -i "/\b$user\b/d" /var/signups_current
 }
 
 del_user() {
@@ -170,8 +170,8 @@ del_user() {
 	rm /etc/security/limits.d/"$user"
 
 	# unset mail aliases
-	sed -i "/$user/d" /etc/aliases
-	sed -i "/$user/d" /etc/email-addresses
+	sed -i "/\b$user\b/d" /etc/aliases
+	sed -i "/\b$user\b/d" /etc/email-addresses
 
 	# remove email mailbox
 	# get userid from lxc-attach
