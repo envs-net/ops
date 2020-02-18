@@ -143,8 +143,8 @@ add_user() {
 	# cleanup /etc/skel/ git stuff from user home
 	rm -rf /home/"$user"/.git /home/"$user"/README.md
 
-	# envs user update (userlist, recently updates and users_info.json)
-	/usr/local/bin/envs.net/envs_user_updated.sh
+	# envs users update (userlist, recently updates and users_info.json)
+	/usr/local/bin/envs.net/envs_user_info.sh
 
 	# announcing new user on mastodon
 	sudo -u services toot post "welcome new user ~$user"
