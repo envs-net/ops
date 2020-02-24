@@ -146,7 +146,6 @@ EOM
                 line_to_set["$user_field","$count_field_entry"]+="$user_value"
               fi
             fi
-          #done <<< "$(tac "$INFO_FILE")" # read file from buttom
           done < "$INFO_FILE"
 
           # add users custom entrys from line_to_set (single lines before arrays)
@@ -183,7 +182,10 @@ EOM
                 cat << EOM >> "$TMP_JSON"
           "${line_to_set[$field]}",
 EOM
-                if [ "$field_count" = "${hc_field_entry[$field_name]}" ]; then
+
+                echo "$field_count - ${hc_field_entry[$field_name]}"
+
+                if [ "$field_count" = "${hc_field_entry[$field_name]}" ] || [ "$field_count" = '0' ]; then
                   # end of user def. array
                   # remove trailing ',' on last user entry
                   unset field_in_progress
