@@ -136,15 +136,17 @@ EOM
                 field_exists+=( "$user_field" )
                 line_to_set["$user_field","$count_field_entry"]+="$user_value"
               else
-                # entry will be a array
+                # entry will be a array (max. 32 entrys)
                 if ! [[ ":${field_is_array[*]}:" =~ $user_field ]]; then
                   field_is_array+=( "$user_field" )
                 fi
-                count_field_entry="$(( "$count_field_entry" +1 ))"
+                count_field_entry="$(( "$count_field_entry" +1 ))" ; [ "$count_field_entry" -le '32' ] || continue
                 line_to_set["$user_field","$count_field_entry"]+="$user_value"
+                highest_count_field_entry["$user_field"]="$count_field_entry"
               fi
             fi
-          done <<< "$(tac "$INFO_FILE")" # read file from buttom
+          #done <<< "$(tac "$INFO_FILE")" # read file from buttom
+          done < "$INFO_FILE"
 
           # add users custom entrys from line_to_set (single lines before arrays)
           #
@@ -180,7 +182,8 @@ EOM
                 cat << EOM >> "$TMP_JSON"
           "${line_to_set[$field]}",
 EOM
-                if [ "$field_count" -eq '0' ]; then
+                if [ "$field_count" -eq 0 ]; then
+                # ??? if [ "$field_count" = "$highest_count_field_entry" ]; then
                   # end of user def. array
                   # remove trailing ',' on last user entry
                   unset field_in_progress
