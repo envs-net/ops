@@ -116,12 +116,13 @@ EOM
         fi
 # user custom infos from .envs file (max. 10 entrys)
         if [ -f "$INFO_FILE" ]; then
-          count_entry='0'               # use to limit entrys
-          count_field_entry='0'         # use to separat array line by line
+          count_entry='0'        # use to limit entrys
+          count_field_entry='0'  # use to separat array line by line
 
-          unset field_exists; declare -a field_exists=()      # contains field names to limit entrys
-          unset field_is_array; declare -a field_is_array=()  # contains array fields to printf correct json entrys
-          unset line_to_set; declare -A line_to_set           # contains user info lines
+          unset field_exists   ; declare -a field_exists=()    # contains field names to limit entrys
+          unset field_is_array ; declare -a field_is_array=()  # contains array fields to printf correct json entrys
+          unset line_to_set    ; declare -A line_to_set        # contains user info lines
+          unset hc_field_entry ; declare -A hc_field_entry     # contains highest_count_field_entry
 
           # check 'INFO_FILE' and add entrys to 'line_to_set' array
           while read -r LINE ; do
@@ -141,8 +142,8 @@ EOM
                   field_is_array+=( "$user_field" )
                 fi
                 count_field_entry="$(( "$count_field_entry" +1 ))" ; [ "$count_field_entry" -le '32' ] || continue
+                hc_field_entry["$user_field"]="$count_field_entry"
                 line_to_set["$user_field","$count_field_entry"]+="$user_value"
-                highest_count_field_entry["$user_field"]="$count_field_entry"
               fi
             fi
           #done <<< "$(tac "$INFO_FILE")" # read file from buttom
@@ -182,8 +183,7 @@ EOM
                 cat << EOM >> "$TMP_JSON"
           "${line_to_set[$field]}",
 EOM
-                if [ "$field_count" -eq 0 ]; then
-                # ??? if [ "$field_count" = "$highest_count_field_entry" ]; then
+                if [ "$field_count" = "${hc_field_entry[$field_name]}" ]; then
                   # end of user def. array
                   # remove trailing ',' on last user entry
                   unset field_in_progress
