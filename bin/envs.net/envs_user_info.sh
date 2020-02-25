@@ -33,28 +33,24 @@ progress_userarray() {
           "${line_to_set[$field]}",
 EOM
               else
-                if [ "$field_in_progress" != "$field_name" ] && ! [[ ":${field_queue[*]}:" =~ $field_name ]]; then
-                  field_queue+=( "$field_name" )
-                else
-                  if [ "$field_in_progress" = "$field_name" ]; then
-                    # continue user def. array
-                    cat << EOM >> "$TMP_JSON"
+                if [ "$field_in_progress" = "$field_name" ]; then
+                  # continue user def. array
+                  cat << EOM >> "$TMP_JSON"
           "${line_to_set[$field]}",
 EOM
-                    if [ "$field_count" = "${hc_field_entry[$field_name]}" ]; then
-                      # end of user def. array
-                      # remove trailing ',' on last user entry
-                      clear_lastline
-                      cat << EOM >> "$TMP_JSON"
+                  if [ "$field_count" = "${hc_field_entry[$field_name]}" ]; then
+                    # end of user def. array
+                    # remove trailing ',' on last user entry
+                    clear_lastline
+                    cat << EOM >> "$TMP_JSON"
         ],
 EOM
-                      unset field_in_progress
-                      field_finished+=( "$field_name" )
-                    fi
-                  else
-                    if ! [[ ":${field_queue[*]}:" =~ $field_name ]]; then
-                      field_queue+=( "$field_name" )
-                    fi
+                    unset field_in_progress
+                    field_finished+=( "$field_name" )
+                  fi
+                else
+                  if ! [ "$field_in_progress" = "$field_name" ] && ! [[ ":${field_queue[*]}:" =~ $field_name ]]; then
+                    field_queue+=( "$field_name" )
                   fi
                 fi
               fi
@@ -243,7 +239,6 @@ EOM
             # remove trailing ',' (no ssh-pubkey print out)
             clear_lastline
           fi
-## if line 118
         else
           # no "$INFO_FILE" file
           # remove trailing ',' for the last user entry
