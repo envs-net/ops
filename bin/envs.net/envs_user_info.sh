@@ -19,6 +19,7 @@ TMP_JSON='/tmp/users_info.json_tmp'
 
 clear_lastline() { sed -i '$ s/,$//' "$TMP_JSON" ; }
 
+
 progress_userarray() {
           for field in "${!line_to_set[@]}"; do
             field_name="${field//,*/}"
@@ -26,7 +27,7 @@ progress_userarray() {
 
             if [[ ":${field_is_array[*]}:" =~ $field_name ]] && ! [[ ":${field_finished[*]}:" =~ $field_name ]]; then
               # begin of user def. array
-              if [ -z "$field_in_progress" ]; then
+              if [ -z "$field_in_progress" ] && [ "$field_count" -eq 0 ]; then
                 field_in_progress="$field_name"
                 cat << EOM >> "$TMP_JSON"
         "$field_name": [
@@ -48,10 +49,8 @@ EOM
                     unset field_in_progress
                     field_finished+=( "$field_name" )
                   fi
-                else
-                  if ! [ "$field_in_progress" = "$field_name" ] && ! [[ ":${field_queue[*]}:" =~ $field_name ]]; then
-                    field_queue+=( "$field_name" )
-                  fi
+                elif ! [ "$field_in_progress" = "$field_name" ] && ! [[ ":${field_queue[*]}:" =~ $field_name ]]; then
+                  field_queue+=( "$field_name" )
                 fi
               fi
             fi
@@ -156,8 +155,7 @@ EOM
         fi
 # user custom infos from .envs file (max. 10 entrys)
         if [ -f "$INFO_FILE" ]; then
-          count_entry='0'        # use to limit entrys
-          count_field_entry='0'  # use to separat array line by line
+          count_entry='0'
 
           unset field_exists    ; declare -a field_exists=()    # contains field names to limit entrys
           unset field_is_array  ; declare -a field_is_array=()  # contains array fields to printf correct json entrys
@@ -173,8 +171,8 @@ EOM
 
               if ! [[ ":${field_exists[*]}:" =~ $user_field ]]; then
                 # entry will be a single line
-                count_entry="$(( "$count_entry" + 1 ))" ; count_field_entry="$(( "$count_field_entry" +1 ))"
-                #[ "$count_entry" -le '10' ] || continue
+                count_field_entry='0'
+                count_entry="$(( "$count_entry" + 1 ))" ; [ "$count_entry" -lt '10' ] || continue
 
                 field_exists+=( "$user_field" )
                 line_to_set["$user_field","$count_field_entry"]+="$user_value"
@@ -183,8 +181,7 @@ EOM
                 if ! [[ ":${field_is_array[*]}:" =~ $user_field ]]; then
                   field_is_array+=( "$user_field" )
                 fi
-                count_field_entry="$(( "$count_field_entry" +1 ))"
-                #[ "$count_field_entry" -le '32' ] || continue
+                count_field_entry="$(( "$count_field_entry" +1 ))" ; [ "$count_field_entry" -lt '32' ] || continue
 
                 hc_field_entry[$user_field]="$count_field_entry"
                 line_to_set["$user_field","$count_field_entry"]+="$user_value"
@@ -213,7 +210,8 @@ EOM
 
           progress_userarray
 
-          if [[ -n "$field_queue" ]]; then
+          if [ -n "${line_to_set[*]}" ]; then
+            # shellcheck disable=SC2034
             for x in "${!field_queue[@]}"; do
               progress_userarray
             done
