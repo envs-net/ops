@@ -34,9 +34,9 @@ progress_userarray() {
         "$field_name": [
           "${line_to_set[$field]}",
 EOM
-              elif [ "$field_in_progress" = "$field_name" ] && [ "$field_count" = "$(( $fin_count + 1 ))" ]; then
+              elif [ "$field_in_progress" = "$field_name" ] && [ "$field_count" = "$(( "$fin_count" + 1 ))" ]; then
                 # continue user def. array
-                fin_count="$(( $fin_count + 1 ))"
+                fin_count="$(( "$fin_count" + 1 ))"
                 cat << EOM >> "$TMP_JSON"
           "${line_to_set[$field]}",
 EOM
@@ -210,13 +210,13 @@ EOM
           unset field_queue    ; declare -a field_queue=()
           unset field_finished ; declare -a field_finished=()
 
-          progress_userarray
+          if [ -n "${field_is_array[*]}" ]; then
+            progress_userarray
 
-          if [ -n "${line_to_set[*]}" ]; then
-            # shellcheck disable=SC2034
-            for x in "${!field_queue[@]}"; do
-              progress_userarray
-            done
+            if [ -n "${field_queue[*]}" ]; then
+              # shellcheck disable=SC2034
+              for x in "${!field_queue[@]}"; do progress_userarray ; done
+            fi
           fi
 
 # ssh
