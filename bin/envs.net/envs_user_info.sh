@@ -28,30 +28,32 @@ progress_userarray() {
             if [[ ":${field_is_array[*]}:" =~ $field_name ]] && ! [[ ":${field_finished[*]}:" =~ $field_name ]]; then
               # begin of user def. array
               if [ -z "$field_in_progress" ] && [ "$field_count" -eq 0 ]; then
+                fin_count='0'
                 field_in_progress="$field_name"
                 cat << EOM >> "$TMP_JSON"
         "$field_name": [
           "${line_to_set[$field]}",
 EOM
-              else
-                if [ "$field_in_progress" = "$field_name" ]; then
-                  # continue user def. array
-                  cat << EOM >> "$TMP_JSON"
+              elif [ "$field_in_progress" = "$field_name" ] && [ "$field_count" = "$(( $fin_count + 1 ))" ]; then
+                # continue user def. array
+                fin_count="$(( $fin_count + 1 ))"
+                cat << EOM >> "$TMP_JSON"
           "${line_to_set[$field]}",
 EOM
-                  if [ "$field_count" = "${hc_field_entry[$field_name]}" ]; then
-                    # end of user def. array
-                    # remove trailing ',' on last user entry
-                    clear_lastline
-                    cat << EOM >> "$TMP_JSON"
+                if [ "$field_count" = "${hc_field_entry[$field_name]}" ]; then
+                  # end of user def. array
+                  # remove trailing ',' on last user entry
+                  clear_lastline
+                  cat << EOM >> "$TMP_JSON"
         ],
 EOM
-                    unset field_in_progress
-                    field_finished+=( "$field_name" )
-                  fi
-                elif ! [ "$field_in_progress" = "$field_name" ] && ! [[ ":${field_queue[*]}:" =~ $field_name ]]; then
-                  field_queue+=( "$field_name" )
+                  unset field_in_progress
+                  field_finished+=( "$field_name" )
+                else
+                  progress_userarray
                 fi
+              elif ! [ "$field_in_progress" = "$field_name" ] && ! [[ ":${field_queue[*]}:" =~ $field_name ]]; then
+                field_queue+=( "$field_name" )
               fi
             fi
           done
