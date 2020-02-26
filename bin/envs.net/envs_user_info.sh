@@ -174,7 +174,7 @@ EOM
               if ! [[ ":${field_exists[*]}:" =~ $user_field ]]; then
                 # entry will be a single line
                 count_field_entry='0'
-                count_entry="$(( "$count_entry" + 1 ))" ; [ "$count_entry" -lt '10' ] || continue
+                count_entry="$(( "$count_entry" + 1 ))" ; [ "$count_entry" -le '10' ] || continue
 
                 field_exists+=( "$user_field" )
                 line_to_set["$user_field","$count_field_entry"]+="$user_value"
