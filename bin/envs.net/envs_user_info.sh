@@ -21,42 +21,44 @@ clear_lastline() { sed -i '$ s/,$//' "$TMP_JSON" ; }
 
 
 progress_userarray() {
-          for field in "${!line_to_set[@]}"; do
-            field_name="${field//,*/}"
-            field_count="${field//*,/}"
+  for field in "${!line_to_set[@]}"; do
+    field_name="${field//,*/}"
+    field_count="${field//*,/}"
 
-            if [[ ":${field_is_array[*]}:" =~ $field_name ]] && ! [[ ":${field_finished[*]}:" =~ $field_name ]]; then
-              # begin of user def. array
-              if [ -z "$field_in_progress" ] && [ "$field_count" -eq 0 ]; then
-                fin_count='0'
-                field_in_progress="$field_name"
-                cat << EOM >> "$TMP_JSON"
+    if [[ ":${field_is_array[*]}:" =~ $field_name ]] && ! [[ ":${field_finished[*]}:" =~ $field_name ]]; then
+
+      if [ -z "$field_in_progress" ] && [ "$field_count" -eq 0 ]; then
+        # begin of user def. array
+        fin_count='0'
+        field_in_progress="$field_name"
+        cat << EOM >> "$TMP_JSON"
         "$field_name": [
           "${line_to_set[$field]}",
 EOM
-              elif [ "$field_in_progress" = "$field_name" ] && [ "$field_count" = "$(( "$fin_count" + 1 ))" ]; then
-                # continue user def. array
-                fin_count="$(( "$fin_count" + 1 ))"
-                cat << EOM >> "$TMP_JSON"
+      elif [ "$field_in_progress" = "$field_name" ] && [ "$field_count" = "$(( "$fin_count" + 1 ))" ]; then
+        # continue user def. array
+        fin_count="$(( "$fin_count" + 1 ))"
+        cat << EOM >> "$TMP_JSON"
           "${line_to_set[$field]}",
 EOM
-                if [ "$field_count" = "${hc_field_entry[$field_name]}" ]; then
-                  # end of user def. array
-                  # remove trailing ',' on last user entry
-                  clear_lastline
-                  cat << EOM >> "$TMP_JSON"
+        if [ "$field_count" = "${hc_field_entry[$field_name]}" ]; then
+          # end of user def. array
+          # remove trailing ',' on last user entry
+          clear_lastline
+          cat << EOM >> "$TMP_JSON"
         ],
 EOM
-                  unset field_in_progress
-                  field_finished+=( "$field_name" )
-                else
-                  progress_userarray
-                fi
-              elif ! [ "$field_in_progress" = "$field_name" ] && ! [[ ":${field_queue[*]}:" =~ $field_name ]]; then
-                field_queue+=( "$field_name" )
-              fi
-            fi
-          done
+          unset field_in_progress
+          field_finished+=( "$field_name" )
+        else
+          progress_userarray
+        fi
+
+      elif ! [ "$field_in_progress" = "$field_name" ] && ! [[ ":${field_queue[*]}:" =~ $field_name ]]; then
+        field_queue+=( "$field_name" )
+      fi
+    fi
+  done
 }
 
 
@@ -159,9 +161,9 @@ EOM
         if [ -f "$INFO_FILE" ]; then
           count_entry='0'
 
-          unset field_exists    ; declare -a field_exists=()    # contains field names to limit entrys
-          unset field_is_array  ; declare -a field_is_array=()  # contains array fields to printf correct json entrys
-          unset line_to_set     ; declare -A line_to_set        # contains user info lines
+          unset field_exists    ; declare -a field_exists=()    # contains field names - distinguish single from array entries
+          unset field_is_array  ; declare -a field_is_array=()  # contains all array field names to printf correct json format
+          unset line_to_set     ; declare -A line_to_set        # contains all user info lines
           unset hc_field_entry  ; declare -A hc_field_entry     # contains highest_count_field_entry
 
           # check 'INFO_FILE' and add entrys to 'line_to_set' array
@@ -173,19 +175,20 @@ EOM
 
               if ! [[ ":${field_exists[*]}:" =~ $user_field ]]; then
                 # entry will be a single line
-                count_field_entry='0'
-                count_entry="$(( "$count_entry" + 1 ))" ; [ "$count_entry" -le '10' ] || continue
-
                 field_exists+=( "$user_field" )
+                count_field_entry='0'
+                count_entry="$(( "$count_entry" + 1 ))" ; [ "$count_entry" -le 10 ] || continue
+
                 line_to_set["$user_field","$count_field_entry"]+="$user_value"
+
               else
                 # entry will be a array (max. 32 entrys)
                 if ! [[ ":${field_is_array[*]}:" =~ $user_field ]]; then
                   field_is_array+=( "$user_field" )
                 fi
-                count_field_entry="$(( "$count_field_entry" +1 ))" ; [ "$count_field_entry" -lt '32' ] || continue
-
+                count_field_entry="$(( "$count_field_entry" +1 ))" ; [ "$count_field_entry" -lt 32 ] || continue
                 hc_field_entry[$user_field]="$count_field_entry"
+
                 line_to_set["$user_field","$count_field_entry"]+="$user_value"
               fi
             fi
@@ -284,3 +287,4 @@ chown root:www-data "$WWW_PATH"/user_updates.php
 
 #
 exit 0
+
