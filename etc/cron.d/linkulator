@@ -1,4 +1,4 @@
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
-* * * * *	gopher	/srv/link2goph/link2goph -s -r /var/gopher/envs.net/ -p 70 -n envs.net -g / >/dev/null 2>&1
+*/10 * * * *	gopher	/srv/link2goph/link2goph -s -r /var/gopher/envs.net/ -p 70 -n envs.net -g / >/dev/null 2>&1
