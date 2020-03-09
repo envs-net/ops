@@ -252,6 +252,7 @@ if [ "$1" = "start" ]; then
 
 	# pleroma / social
 	# => apache2 proxy (http/https)
+	$IPT -w -t nat -A PREROUTING -d 5.199.136.29 -p tcp --dport 22 -j DNAT --to-destination 192.168.1.18:22
 	$IPT -w -t nat -A PREROUTING -d 5.199.136.29 -p tcp --dport 70 -j DNAT --to-destination 192.168.1.18:7070
 	$IPT -w -t nat -A PREROUTING -d 5.199.136.29 -p tcp --dport 7070 -j DNAT --to-destination 192.168.1.18:7070
 	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 7070 -j DNAT --to-destination 192.168.1.18:7070
