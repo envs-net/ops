@@ -20,7 +20,7 @@ shells=(bash csh dash elvish fish ksh mksh sash tcsh xonsh yash zsh)
 readarray -t sorted_shells < <(printf '%s\n' "${shells[@]}" | sort)
 
 
-editors=(emacs micro nano neovim vim)
+editors=(ed emacs micro nano neovim vim)
 readarray -t sorted_editors < <(printf '%s\n' "${editors[@]}" | sort)
 
 
@@ -39,8 +39,8 @@ coding_tools=(ack bison build-essential cl-launch cvs devscripts ecl gawk git gr
 readarray -t sorted_coding_tools < <(printf '%s\n' "${coding_tools[@]}" | sort)
 
 
-misc=(aria2 bc busybox burrow byobu clinte gfu goaccess hugo jekyll mariadb-client mandoc mathomatic mathtex mkdocs
-    pandoc pelican screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
+misc=(aria2 bc busybox burrow byobu clinte dict gfu goaccess hugo jekyll mariadb-client mandoc mathomatic mathtex mkdocs
+    pandoc pelican sagemath screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 
 #
