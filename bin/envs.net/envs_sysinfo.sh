@@ -172,7 +172,7 @@ cat<<EOM > "$TMP_JSON"
         "url":         "gemini://envs.net/"
       },
       "jitsi-meet": {
-        "desc":        "secure, simple and scalable video conferences that you use as a standalone app or embed in your web application.",
+        "desc":        "secure, fully featured, simple and scalable and completely free video conferences.",
         "version":     "$(lxc-attach -n jitsi -- bash -c "dpkg-query -f '\${Version}\n' -W jitsi-meet")",
         "url":         "https://jitsi.envs.net/"
       },
