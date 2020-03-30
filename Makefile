@@ -43,6 +43,7 @@ bin:
 
 etc:
 	@printf "$(GREEN)--- etc ------------------------------------------------\n$(RESET)"
+	@install -m 644 etc/etc/hosts /etc
 	@install -m 644 etc/etc/inetd.conf /etc
 	@install -m 644 etc/etc/inputrc /etc
 	@install -m 644 etc/etc/nanorc /etc

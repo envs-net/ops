@@ -1,4 +1,5 @@
 #!/bin/sh
+# DO NOT TOUCH IT HERE SEE GIT REPO 'envs/ops'
 
 set -e
 
@@ -23,6 +24,9 @@ for domain in $RENEWED_DOMAINS; do
 
 			# pleroma
 			lxc-attach -n pleroma -- bash -c "systemctl reload nginx"
+
+			# monitor
+			lxc-attach -n moni -- bash -c "systemctl reload nginx"
 
 			# mail
 			# has a own letencrypt cert in container!
