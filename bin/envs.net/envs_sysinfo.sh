@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad getwtxt gitea gophernicus halcyon jetforce jitsi-meet mariadb-server matrix nginx
+services=(0x0 bbj cryptpad getwtxt gitea gophernicus halcyon ipinfo jetforce jitsi-meet mariadb-server matrix nginx
     openssh-server pleroma privatebin riot-web searx termbin tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -163,7 +163,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "ipinfo": {
         "desc":        "ip address info",
-        "version":     "",
+        "version":     "-",
         "url":         "https://ip.envs.net/"
       },
       "jetforce": {

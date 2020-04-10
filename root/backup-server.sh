@@ -2,12 +2,13 @@
 export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 
 [ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
+[ "$(ps ax | grep -ce 'restic\|ch_bak:core.envs.net')" -gt 1 ] && printf 'Backup runs already!\n' && exit 1
 
 ###
 
 export RESTIC_PASSWORD=';)'
 
-restic='ionice -c0 nice -n-19 restic -r'
+restic='nice -n19 ionice -n7 restic -r'
 rsync='rsync -av --delete --numeric-ids'
 
 ###
@@ -74,16 +75,16 @@ mysqldump -u root --opt --order-by-primary --all-databases | gzip -c > /var/db-b
 #pg_dumpall -U postgres | gzip -c > /var/db-backups/pgsql-dump-$(date +%F.%H%M%S).gz
 
 # Backup git
-lxc-attach -n gitea -- bash -c "sudo -Hiu git /usr/local/bin/gitea dump -c /etc/gitea/app.ini"
+lxc-attach -n gitea -- bash -c "sudo -Hiu git nice -n19 ionice -n7 /usr/local/bin/gitea dump -c /etc/gitea/app.ini"
 
 # Backup matrix
-lxc-attach -n matrix -- bash -c "sudo -Hiu postgres pg_dump -F t matrix > /var/db-backups/matrix.tar"
+lxc-attach -n matrix -- bash -c "sudo -Hiu postgres nice -n19 ionice -n7 pg_dump -F t matrix > /var/db-backups/matrix.tar"
 
 # Backup pleroma
-lxc-attach -n pleroma -- bash -c "sudo -Hiu postgres pg_dump -F t pleroma > /var/db-backups/pleroma.tar"
+lxc-attach -n pleroma -- bash -c "sudo -Hiu postgres nice -n19 ionice -n7 pg_dump -F t pleroma > /var/db-backups/pleroma.tar"
 
 # Backup ttrss
-lxc-attach -n rss -- bash -c "mysqldump -u root ttrss | gzip -c > /var/db-backups/ttrss.gz"
+lxc-attach -n rss -- bash -c "nice -n10 ionice -n7 mysqldump -u root ttrss | nice -n19 ionice -n7 gzip -c > /var/db-backups/ttrss.gz"
 
 ###
 
@@ -100,11 +101,11 @@ apt-key exportall | tee "$BACKUP_DIR"_local/repo.keys &>/dev/null
 #
 # Restic Backups
 #
-lp='/var/lib/lxc/**/rootfs'
+lp='/var/lib/lxc/*/rootfs'
 exclude_lxc="$lp/dev,$lp/media,$lp/mnt,$lp/proc,$lp/run,$lp/sys,$lp/tmp,$lp/var/tmp"
 
 for BH in $BACKUP_HOST; do
-	$restic sftp:"$BH":"$REMOTE_DIR"_system backup / --exclude={/dev,/media,/mnt,/proc,/run,/sys,/tmp,/root/.cache/,/var/tmp,/var/lib/lxcfs/cgroup,/data/tmp,/data/BACKUP,/data/BACKUP_LXC,$exclude_lxc}
+	eval $restic sftp:"$BH":"$REMOTE_DIR"_system backup / --exclude=\{/dev,/media,/mnt,/proc,/run,/sys,/tmp,/root/.cache/,/var/tmp,/var/lib/lxcfs/cgroup,/data/tmp,/data/BACKUP,/data/BACKUP_LXC,$exclude_lxc\}
 ##	$restic sftp:"$BH":"$REMOTE_DIR"_lxc backup "$BACKUP_DIR_LXC"
 done
 
@@ -116,7 +117,7 @@ CHECKEOM="$(date --date=tomorrow +%d)"
 if [ "$CHECKEOM" -eq 01 ]; then
 	for BH in $BACKUP_HOST; do
 		for RLN in $RESTIC_LOC_NAME; do
-			restic -r sftp:"$BH":"$REMOTE_DIR"_"$RLN" forget --keep-daily 1 --keep-weekly 4 --keep-monthly 3
+			restic -r sftp:"$BH":"$REMOTE_DIR"_"$RLN" forget --keep-daily 1 --keep-weekly 4 --keep-monthly 1
 			restic -r sftp:"$BH":"$REMOTE_DIR"_"$RLN" prune
 		done
 	done
