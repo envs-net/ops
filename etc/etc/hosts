@@ -33,5 +33,5 @@ ff02::2 ip6-allrouters
 192.168.1.16  rss.envs.net rss
 192.168.1.17  pb.envs.net pb pastebin.envs.net pastbin
 192.168.1.18  pleroma.envs.net pleroma social halcyon.envs.net halcyon
-192.168.1.19  jitsi.envs.net jitsi
+192.168.1.19  jitsi.envs.net jitsi meet.envs.net meet
 
