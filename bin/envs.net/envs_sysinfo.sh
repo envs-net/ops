@@ -24,7 +24,7 @@ editors=(ed emacs micro nano neovim vim)
 readarray -t sorted_editors < <(printf '%s\n' "${editors[@]}" | sort)
 
 
-inet_clients=(alpine av98 bombadillo curl irssi lynx neomutt meli mutt mosh openssh-client pb toot weechat wget vf1)
+inet_clients=(alpine av98 bombadillo curl gomuks irssi lynx neomutt meli mutt mosh openssh-client pb toot weechat wget vf1)
 readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 
