@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad getwtxt gitea gophernicus halcyon ipinfo jetforce jitsi-meet mariadb-server matrix nginx
+services=(0x0 bbj cryptpad getwtxt gitea gophernicus halcyon ipinfo jetforce mariadb-server matrix nginx
     openssh-server pleroma privatebin riot-web searx termbin tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -170,11 +170,6 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "an tcp server for the gemini protocol",
         "version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
         "url":         "gemini://envs.net/"
-      },
-      "jitsi-meet": {
-        "desc":        "secure, fully featured, simple and scalable and completely free video conferences.",
-        "version":     "$(lxc-attach -n jitsi -- bash -c "dpkg-query -f '\${Version}\n' -W jitsi-meet")",
-        "url":         "https://jitsi.envs.net/"
       },
       "matrix": {
         "desc":        "an open network for secure, decentralized communication",
