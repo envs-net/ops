@@ -188,7 +188,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "riot-web": {
         "desc":        "a universal secure chat app for matrix (web-client)",
-        "version":     "$(lxc-attach -n matrix -- bash -c "dpkg-query -f '\${Version}\n' -W riot-web")",
+        "version":     "$(cat /var/lib/lxc/matrix/rootfs/opt/Riot/resources/webapp/version)",
         "url":         "https://matrix.envs.net/"
       },
       "searx": {
