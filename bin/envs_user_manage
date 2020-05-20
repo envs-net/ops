@@ -141,7 +141,7 @@ add_user() {
 	sed -i s/_username_/"$user"/g /home/"$user"/.weechat/irc.conf
 
 	# cleanup /etc/skel/ git stuff from user home
-	rm -rf /home/"$user"/.git /home/"$user"/README.md
+	rm -rf /home/"$user"/.git /home/"$user"/.drone.yml  /home/"$user"/README.md
 
 	# envs users update (userlist, recently updates and users_info.json)
 	/usr/local/bin/envs.net/envs_user_info.sh
