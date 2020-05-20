@@ -264,7 +264,7 @@ EOM
 
 
 mv "$TMP_JSON" "$WWW_PATH"/users_info.json
-chown root:www-data "$WWW_PATH"/users_info.json
+chown www-data:www-data "$WWW_PATH"/users_info.json
 
 
 #
@@ -275,7 +275,7 @@ LIST="$(stat --format=%Z\ %n /home/*/public_html/* | grep -v updated | grep -v y
 echo "$LIST" | perl /usr/local/bin/envs.net/envs_user_info_genpage.pl > /tmp/user_updates.php_tmp
 
 mv /tmp/user_updates.php_tmp "$WWW_PATH"/user_updates.php
-chown root:www-data "$WWW_PATH"/user_updates.php
+chown www-data:www-data "$WWW_PATH"/user_updates.php
 
 
 #
@@ -287,4 +287,3 @@ chown root:www-data "$WWW_PATH"/user_updates.php
 
 #
 exit 0
-
