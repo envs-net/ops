@@ -20,6 +20,7 @@ Cmnd_Alias	EXCLUDE=!/sbin/halt, !/bin/rm -rf /
 
 # Cmnd alias for deploy user
 Cmnd_Alias	GITPULL=/usr/bin/git pull *
+Cmnd_Alias  LXCA=/usr/bin/lxc-attach -n *
 Cmnd_Alias	MAKE=/usr/bin/make *
 Cmnd_Alias	MKDOCS=/usr/local/bin/mkdocs *
 
@@ -30,7 +31,7 @@ Cmnd_Alias	THELOUNGE=/srv/thelounge/.yarn/bin/thelounge add *
 # User privilege specification
 root		ALL=(ALL:ALL) ALL,EXCLUDE
 services	ALL=(ALL:ALL) NOPASSWD: ALL,EXCLUDE
-deploy		ALL=(ALL:ALL) NOPASSWD: GITPULL,MAKE,MKDOCS
+deploy		ALL=(ALL:ALL) NOPASSWD: GITPULL,LXCA,MAKE,MKDOCS
 
 # Allow members of group sudo to execute any command
 %sudo		ALL=(ALL:ALL) NOPASSWD: ALL,EXCLUDE
