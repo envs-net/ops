@@ -17,6 +17,12 @@ Defaults	secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/b
 
 # Cmnd alias specification
 Cmnd_Alias	EXCLUDE=!/sbin/halt, !/bin/rm -rf /
+
+# Cmnd alias for deploy user
+Cmnd_Alias	GITPULL=/usr/bin/git pull *
+Cmnd_Alias	MAKE=/usr/bin/make *
+Cmnd_Alias	MKDOCS=/usr/local/bin/mkdocs *
+
 #
 Cmnd_Alias	THELOUNGE=/srv/thelounge/.yarn/bin/thelounge add *
 #Cmnd_Alias	TOOT=/usr/bin/toot post *
@@ -24,10 +30,12 @@ Cmnd_Alias	THELOUNGE=/srv/thelounge/.yarn/bin/thelounge add *
 # User privilege specification
 root		ALL=(ALL:ALL) ALL,EXCLUDE
 services	ALL=(ALL:ALL) NOPASSWD: ALL,EXCLUDE
+deploy		ALL=(ALL:ALL) NOPASSWD: GITPULL,MAKE,MKDOCS
 
 # Allow members of group sudo to execute any command
 %sudo		ALL=(ALL:ALL) NOPASSWD: ALL,EXCLUDE
 
+# ENVS GROUP
 %envs		ALL=(thelounge)	NOPASSWD: THELOUNGE
 #%envs		ALL=(services)	NOPASSWD: TOOT
 
