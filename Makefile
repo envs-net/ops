@@ -26,6 +26,7 @@ clean:
 	@rm -fv /etc/init.d/S41firewall
 	@rm -fv /etc/letsencrypt/renewal-hooks/deploy/envs.sh
 	stow -t /etc/nginx -D -d etc nginx
+	@rm -fv /etc/security/limits.conf
 	@rm -fv /etc/ssh/ssh_config /etc/ssh/sshd_config
 	stow -t /etc/sysctl.d -D -d etc sysctl.d
 	stow -t /etc/systemd/system -D -d etc/systemd system
@@ -48,6 +49,7 @@ etc:
 	@install -m 644 etc/etc/inputrc /etc
 	@install -m 644 etc/etc/nanorc /etc
 	@install -m 644 etc/etc/sudoers /etc
+	@install -m 644 etc/etc/security/limits.conf /etcsecurity
 
 cron:
 	@printf "$(GREEN)--- cron -----------------------------------------------\n$(RESET)"
@@ -117,6 +119,7 @@ nuke:
 	@rm -fv /etc/init.d/S41firewall
 	@rm -fv /etc/letsencrypt/renewal-hooks/deploy/envs.sh
 	@rm -rfv /etc/nginx/*
+	@rm -fv /etc/security/limits.conf
 	@rm -fv /etc/ssh/ssh_config /etc/ssh/sshd_config
 	@rm -fv /etc/sysctl.d/10-kernel-hardening.conf /etc/sysctl.d/30-lxc-inotify.conf \
 		/etc/sysctl.d/fs.conf /etc/sysctl.d/net.conf /etc/sysctl.d/panic.conf /etc/sysctl.d/protect-links.conf
