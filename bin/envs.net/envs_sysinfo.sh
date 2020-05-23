@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad getwtxt gitea gophernicus halcyon ipinfo jetforce mariadb-server matrix nginx
+services=(0x0 bbj cryptpad drone getwtxt gitea gophernicus halcyon ipinfo jetforce mariadb-server matrix nginx
     openssh-server pleroma privatebin riot-web searx termbin tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -140,6 +140,11 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "collaborative real time editing",
         "version":     "$(curl -fs https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
         "url":         "https://pad.envs.net/"
+      },
+      "drone": {
+        "desc":        "continuous delivery platform",
+        "version":     "$(curl -fs https://drone."$DOMAIN"/version | jq -Mr .version)",
+        "url":         "https://drone.envs.net/"
       },
       "getwtxt": {
         "desc":        "a twtxt registry service - microblogging for hackers",
