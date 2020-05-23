@@ -20,7 +20,7 @@ Cmnd_Alias	EXCLUDE=!/sbin/halt, !/bin/rm -rf /
 
 # Cmnd alias for deploy user
 Cmnd_Alias	GITPULL=/usr/bin/git pull *
-Cmnd_Alias  LXCA=/usr/bin/lxc-attach -n *
+Cmnd_Alias	LXCA=/usr/bin/lxc-attach -n *
 Cmnd_Alias	MAKE=/usr/bin/make *
 Cmnd_Alias	MKDOCS=/usr/local/bin/mkdocs *
 
