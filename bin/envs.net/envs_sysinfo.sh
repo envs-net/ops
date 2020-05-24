@@ -120,7 +120,6 @@ cat<<EOM > "$TMP_JSON"
     "system": {
       "os":           "$(lsb_release -sd)",
       "uptime":       "$(UP=$(uptime -p) ; echo ${UP//up/})",
-      "load":         "$(LOAD=$(uptime | grep -ohe 'load average[s:][: ].*' | awk '{ print $3 $4 $5 }') ; echo ${LOAD//,/ })",
       "uname":        "$(uname -a)",
       "board":        "$(hostnamectl status | awk '/Chassis/ {print $2}')",
       "cpuinfo":      "$(awk '/system type|model name/{gsub(/^.*:[ ]*/,"");print $0;exit}' /proc/cpuinfo)",
