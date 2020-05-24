@@ -119,7 +119,8 @@ cat<<EOM > "$TMP_JSON"
     },
     "system": {
       "os":           "$(lsb_release -sd)",
-      "uptime":       "$(cat /proc/uptime)",
+      "uptime":       "$(UP=$(uptime -p) ; ${UP//up/})",
+      "load":         "$(LOAD=$(uptime | grep -ohe 'load average[s:][: ].*' | awk '{ print $3 $4 $5 }') ; echo ${LOAD//,/ })",
       "uname":        "$(uname -a)",
       "board":        "$(hostnamectl status | awk '/Chassis/ {print $2}')",
       "cpuinfo":      "$(awk '/system type|model name/{gsub(/^.*:[ ]*/,"");print $0;exit}' /proc/cpuinfo)",
@@ -249,7 +250,7 @@ cat<<EOM >> "$TMP_JSON"
 EOM
 
 mv "$TMP_JSON" "$JSON_FILE"
-chown root:www-data "$JSON_FILE"
+chown www-data:www-data "$JSON_FILE"
 
 
 #
@@ -375,7 +376,7 @@ $(print_category 'misc' "${sorted_misc[@]}")
 EOM
 
 mv /tmp/sysinfo.php_tmp "$WWW_PATH"/sysinfo.php
-chown root:www-data "$WWW_PATH"/sysinfo.php
+chown www-data:www-data "$WWW_PATH"/sysinfo.php
 
 #
 exit 0
