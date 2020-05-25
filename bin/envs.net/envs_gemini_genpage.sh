@@ -10,7 +10,8 @@
 userlist() {
 	mapfile -t users < <(jq -Mr '.data.users|keys[]' /var/www/envs.net/users_info.json)
 	for USERNAME in "${users[@]}"; do
-		if [ -f /home/"$USERNAME"/public_gemini/index.gmi ]; then
+		gmi_file="/home/$USERNAME/public_gemini/index.gmi"
+		if [ -f "$gmi_file" ] && [ -s "$gmi_file" ]; then
 			[ ! -L /var/gemini/\~"$USERNAME" ] && ln -s /home/"$USERNAME"/public_gemini /var/gemini/\~"$USERNAME"
 			printf '=> gemini://envs.net/~%s/ ~%s\n' "$USERNAME" "$USERNAME"
 		else
