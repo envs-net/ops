@@ -19,6 +19,8 @@ Defaults	secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/b
 Cmnd_Alias	EXCLUDE=!/sbin/halt, !/bin/rm -rf /
 
 # Cmnd alias for deploy user
+Cmnd_Alias	ENV=/usr/bin/env *
+Cmnd_Alias	SH=/bin/sh *
 Cmnd_Alias	GITPULL=/usr/bin/git pull *
 Cmnd_Alias	LXCA=/usr/bin/lxc-attach -n *
 Cmnd_Alias	MAKE=/usr/bin/make *
@@ -31,7 +33,7 @@ Cmnd_Alias	THELOUNGE=/srv/thelounge/.yarn/bin/thelounge add *
 # User privilege specification
 root		ALL=(ALL:ALL) ALL,EXCLUDE
 services	ALL=(ALL:ALL) NOPASSWD: ALL,EXCLUDE
-deploy		ALL=(ALL:ALL) NOPASSWD: GITPULL,LXCA,MAKE,MKDOCS
+deploy		ALL=(ALL:ALL) NOPASSWD: ENV,SH,GITPULL,LXCA,MAKE,MKDOCS
 
 # Allow members of group sudo to execute any command
 %sudo		ALL=(ALL:ALL) NOPASSWD: ALL,EXCLUDE
