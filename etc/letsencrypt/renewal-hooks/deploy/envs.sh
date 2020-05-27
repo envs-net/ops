@@ -38,6 +38,9 @@ for domain in $RENEWED_DOMAINS; do
 			# gitea
 			lxc-attach -n gitea -- bash -c "systemctl reload nginx"
 
+			# drone-ci
+			lxc-attach -n drone -- bash -c "systemctl reload nginx"
+
 			# searx
 			lxc-attach -n searx -- bash -c "systemctl reload nginx"
 
