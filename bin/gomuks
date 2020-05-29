@@ -1,3 +1,3 @@
 #!/bin/sh
 
-DEBUG=0 /opt/services/gomuks/gomuks "$@"
+TMPDIR=/tmp/gomuks-"$USER"-debug.log /usr/bin/gomuks
