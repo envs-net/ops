@@ -357,6 +357,7 @@ if [ "$1" = "start" ]; then
 
 	# prometheus node
 	$IPT -w -A INPUT -m state --state NEW -d 192.168.1.1 -s 192.168.1.6 -p tcp --dport 9100 -j ACCEPT
+	$IPT -w -A INPUT -m state --state NEW -d 192.168.1.1 -s 192.168.1.6 -p tcp --dport 9113 -j ACCEPT
 
 	# finger
 	$IPT -w -A INPUT -m state --state NEW -d 89.163.145.170 -p tcp --dport 79 -j ACCEPT
