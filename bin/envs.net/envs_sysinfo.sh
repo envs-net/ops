@@ -147,22 +147,22 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://drone.envs.net/"
       },
       "getwtxt": {
-        "desc":        "a twtxt registry service - microblogging for hackers",
+        "desc":        "twtxt registry service - microblogging for hackers",
         "version":     "$(curl -fs https://twtxt."$DOMAIN"/api/plain/version | awk -Fv '{print $2}')",
         "url":         "https://twtxt.envs.net/"
       },
       "gitea": {
-        "desc":        "a painless self-hosted git service written in go",
+        "desc":        "painless self-hosted git service written in go",
         "version":     "$(lxc-attach -n gitea -- bash -c "gitea --version | awk '{print \$3}'")",
         "url":         "https://git.envs.net/"
       },
       "gophernicus": {
-        "desc":        "a modern full-featured (and hopefully) secure gopher daemon",
+        "desc":        "modern full-featured (and hopefully) secure gopher daemon",
         "version":     "$(/usr/sbin/gophernicus -v | sed 's/Gophernicus\///' | awk '{print $1}')",
         "url":         "gopher://envs.net/"
       },
       "halcyon": {
-        "desc":        "a webclient for mastodon and pleroma which looks like twitter",
+        "desc":        "webclient for mastodon and pleroma which looks like twitter",
         "version":     "$(cat /var/lib/lxc/pleroma/rootfs/var/www/halcyon/version.txt)",
         "url":         "https://halcyon.envs.net/"
       },
@@ -172,12 +172,12 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://ip.envs.net/"
       },
       "jetforce": {
-        "desc":        "an tcp server for the gemini protocol",
+        "desc":        "tcp server for the gemini protocol",
         "version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
         "url":         "gemini://envs.net/"
       },
       "matrix": {
-        "desc":        "an open network for secure, decentralized communication",
+        "desc":        "open network for secure, decentralized communication",
         "version":     "$(curl -fs https://matrix."$DOMAIN"/_matrix/federation/v1/version | jq -Mr .server.version)",
         "url":         "https://matrix.envs.net/"
       },
@@ -187,17 +187,17 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://pleroma.envs.net/"
       },
       "privatebin": {
-        "desc":        "a graphical pastebin",
+        "desc":        "graphical pastebin",
         "version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed '$ s/*$//'")",
         "url":         "https://pb.envs.net/"
       },
       "riot-web": {
-        "desc":        "a universal secure chat app for matrix (web-client)",
+        "desc":        "universal secure chat app for matrix (web-client)",
         "version":     "$(cat /var/lib/lxc/matrix/rootfs/opt/Riot/resources/webapp/version)",
         "url":         "https://matrix.envs.net/"
       },
       "searx": {
-        "desc":        "a privacy-respecting metasearch engine",
+        "desc":        "privacy-respecting metasearch engine",
         "version":     "$(curl -fs https://searx."$DOMAIN"/config | jq -Mr .version)",
         "url":         "https://searx.envs.net/"
       },
@@ -207,7 +207,7 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://tb.envs.net/"
       },
       "thelounge": {
-        "desc":        "a self-hosted web irc client",
+        "desc":        "self-hosted web irc client",
         "version":     "$(sudo -u thelounge /srv/thelounge/.yarn/bin/thelounge -v | awk -Fv '{print $2}')",
         "url":         "https://webirc.envs.net/"
       },
