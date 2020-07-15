@@ -150,7 +150,7 @@ add_user() {
 	sudo -u services toot post "welcome new user ~$user"
 
 	# cleanup current signup
-	sed -i "/\b$user\b/d" /var/signups_current
+	sed -i"" "/\b$user\b/d" /var/signups_current
 }
 
 del_user() {
