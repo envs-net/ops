@@ -346,6 +346,8 @@ include 'header.php';
 <h1><em>sysinfo</em></h1>
 <pre>
 <em>full data source: <a href="/sysinfo.json">https://$DOMAIN/sysinfo.json</a></em>
+
+<em>status page: <a href="https://status.envs.net/">https://status.envs.net/</a></em>
 <em>webserver stats: <a href="/stats/">https://$DOMAIN/stats/</a></em>
 
 <em>server admin: <a href="/~creme/">&#126;creme</a></em>
