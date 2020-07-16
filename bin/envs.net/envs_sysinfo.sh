@@ -11,8 +11,8 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad drone getwtxt gitea gophernicus halcyon ipinfo jetforce mariadb-server matrix nginx
-    openssh-server pleroma privatebin riot-web searx termbin tt-rss thelounge znc)
+services=(0x0 bbj cryptpad drone element-web getwtxt gitea gophernicus halcyon ipinfo jetforce mariadb-server matrix nginx
+    openssh-server pleroma privatebin searx termbin tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -146,6 +146,11 @@ cat<<EOM > "$TMP_JSON"
         "version":     "$(curl -fs https://drone."$DOMAIN"/version | jq -Mr .version)",
         "url":         "https://drone.envs.net/"
       },
+      "element-web": {
+        "desc":        "universal secure chat app for matrix (web-client)",
+        "version":     "$(cat /var/lib/lxc/matrix/rootfs/opt/Riot/resources/webapp/version)",
+        "url":         "https://element.envs.net/"
+      },
       "getwtxt": {
         "desc":        "twtxt registry service - microblogging for hackers",
         "version":     "$(curl -fs https://twtxt."$DOMAIN"/api/plain/version | awk -Fv '{print $2}')",
@@ -190,11 +195,6 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "graphical pastebin",
         "version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed '$ s/*$//'")",
         "url":         "https://pb.envs.net/"
-      },
-      "riot-web": {
-        "desc":        "universal secure chat app for matrix (web-client)",
-        "version":     "$(cat /var/lib/lxc/matrix/rootfs/opt/Riot/resources/webapp/version)",
-        "url":         "https://riot.envs.net/"
       },
       "searx": {
         "desc":        "privacy-respecting metasearch engine",
