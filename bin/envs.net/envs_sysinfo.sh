@@ -194,7 +194,7 @@ cat<<EOM > "$TMP_JSON"
       "riot-web": {
         "desc":        "universal secure chat app for matrix (web-client)",
         "version":     "$(cat /var/lib/lxc/matrix/rootfs/opt/Riot/resources/webapp/version)",
-        "url":         "https://matrix.envs.net/"
+        "url":         "https://riot.envs.net/"
       },
       "searx": {
         "desc":        "privacy-respecting metasearch engine",
