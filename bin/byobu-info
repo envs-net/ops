@@ -2,7 +2,7 @@
 
 /usr/local/bin/motd
 
-printf "you're in a byobu session\n"
+printf "\nyou're in a byobu session\n"
 printf "if you're familiar with tmux, continue as normal, but with ctrl-a instead of ctrl-b\n"
 printf "if you don't want to this happen by default when you log in, run byobu-disable.\n"
 
