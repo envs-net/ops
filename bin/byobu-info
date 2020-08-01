@@ -14,4 +14,4 @@ printf 'f3 and f4 move you between tabs\n'
 printf 'f6 disconnects and leaves everything running\n'
 printf 'shift-f12 disable/enable byobu f-key bindings\n'
 
-printf '\nedit your session startup in ~/.byobu/.tmux.conf.\n'
+printf '\nedit your session startup in ~/.byobu/.tmux.conf.\n\n'
