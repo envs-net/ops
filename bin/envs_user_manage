@@ -126,7 +126,7 @@ add_user() {
 	# setup mutt
 	echo -e "$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /home/"$user"/.muttrc)" > /home/"$user"/.muttrc
 	chmod go-r /home/"$user"/.muttrc
-	printf '\n~%s\n' "$user" > /home/"$user"/.mutt/signature
+	printf '\n%s\n' "$user" > /home/"$user"/.mutt/signature
 
 	# setup database
 	#add_user_mysql_db
