@@ -1,8 +1,7 @@
 # DO NOT TOUCH IT HERE SEE GIT REPO 'envs/ops'
 
 # !!! DO NOT SET ALIAS ENVS.NET TO localhost # mail problem !!!
-127.0.0.1		localhost
-127.0.0.1		core.envs.net bbj.envs.net gopher.envs.net help.envs.net ip.envs.net ip.envs.sh stats.envs.net ttbp.envs.net twtxt.envs.net webirc.envs.net znc.envs.net
+127.0.0.1		localhost core.envs.net bbj.envs.net gopher.envs.net help.envs.net ip.envs.net ip.envs.sh stats.envs.net ttbp.envs.net twtxt.envs.net webirc.envs.net znc.envs.net
 
 89.163.145.170	envs.net core core.envs.net ve423.venus.dedi.server-hosting.expert ve423
 5.199.136.30	ssh.envs.net
@@ -26,12 +25,10 @@ ff02::2 ip6-allrouters
 192.168.1.11  searx.envs.net searx
 192.168.1.12  cryptpad pad.envs.net pad cryptpad
 192.168.1.13  drone.envs.net drone
-192.168.1.14  matrix.envs.net matrix riot.envs.net riot dimension.envs.net dimension
+192.168.1.14  matrix.envs.net matrix element.envs.net element lag.envs.net lag riot.envs.net riot dimension.envs.net dimension
 
-192.168.1.15  envs.sh 0x0.envs.net null.envs.net 0x0 null
-192.168.1.15  tb.envs.net tb termbin.envs.net termbin
+192.168.1.15  envs.sh 0x0.envs.net null.envs.net 0x0 null tb.envs.net tb termbin.envs.net termbin
 192.168.1.16  rss.envs.net rss
-192.168.1.17  pb.envs.net pb pastebin.envs.net pastbin
+192.168.1.17  pb.envs.net pb pastebin.envs.net pastbin bin.envs.net bin
 192.168.1.18  pleroma.envs.net pleroma social halcyon.envs.net halcyon
 192.168.1.19  jitsi.envs.net jitsi meet.envs.net meet
-
