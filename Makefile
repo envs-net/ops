@@ -49,7 +49,7 @@ etc:
 	@install -m 644 etc/etc/inputrc /etc
 	@install -m 644 etc/etc/nanorc /etc
 	@install -m 644 etc/etc/sudoers /etc
-	@install -m 644 etc/etc/security/limits.conf /etcsecurity
+	@install -m 644 etc/security/limits.conf /etc/security
 
 cron:
 	@printf "$(GREEN)--- cron -----------------------------------------------\n$(RESET)"
