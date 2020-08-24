@@ -12,7 +12,7 @@ DOMAIN='envs.net'
 
 # define packages by category for sysinfo.php Page
 services=(0x0 bbj cryptpad drone element-web getwtxt gitea gophernicus halcyon ipinfo jetforce mariadb-server matrix nginx
-    openssh-server pleroma privatebin searx termbin tt-rss thelounge znc)
+    openssh-server pleroma privatebin searx tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -200,11 +200,6 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "privacy-respecting metasearch engine",
         "version":     "$(curl -fs https://searx."$DOMAIN"/config | jq -Mr .version)",
         "url":         "https://searx.envs.net/"
-      },
-      "termbin": {
-        "desc":        "netcat-based command line pastebin",
-        "version":     "-",
-        "url":         "https://tb.envs.net/"
       },
       "thelounge": {
         "desc":        "self-hosted web irc client",
