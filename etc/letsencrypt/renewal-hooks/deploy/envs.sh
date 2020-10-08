@@ -13,6 +13,9 @@ for domain in $RENEWED_DOMAINS; do
 			cat "$RENEWED_LINEAGE/fullchain.pem" > "$daemon_cert_root/fullchain.pem"
 			cat /etc/ssl/certs/envs_dhparam.pem > "$daemon_cert_root/envs_dhparam.pem"
 
+			#rsync -av --numeric-ids "$daemon_cert_root" root@srv01.envs.net:/opt/ssl_certs/
+			#ssh root@srv01.envs.net bash -c "/opt/sync_certs.sh"
+
 			# matrix
 			matrix_dir=/var/lib/lxc/matrix/rootfs/etc/matrix-synapse
 			cp "$daemon_cert_root/privkey.pem" "$matrix_dir"/
@@ -61,6 +64,9 @@ for domain in $RENEWED_DOMAINS; do
 			cat "$RENEWED_LINEAGE/chain.pem" > "$daemon_cert_root/chain.pem"
 			cat "$RENEWED_LINEAGE/fullchain.pem" > "$daemon_cert_root/fullchain.pem"
 			cat /etc/ssl/certs/envs_dhparam.pem > "$daemon_cert_root/envs_dhparam.pem"
+
+			#rsync -av --numeric-ids "$daemon_cert_root" root@srv01.envs.net:/opt/ssl_certs/
+
 			# 0x0 / fiche
 			lxc-attach -n null -- bash -c "systemctl reload nginx"
 		;;

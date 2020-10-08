@@ -158,6 +158,18 @@ if [ "$1" = "start" ]; then
 	$IPT -w -A FORWARD -p tcp -d 192.168.1.2 --dport 53 -j ACCEPT
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.2 -j SNAT --to 89.163.145.170
 
+	# DoT / DoH
+	$IPT -w -t nat -A PREROUTING -d 5.199.130.141 -p udp --dport 53 -j DNAT --to-destination 192.168.1.22:53
+	$IPT -w -A FORWARD -p udp -d 192.168.1.22 --dport 53 -j ACCEPT
+	$IPT -w -t nat -A PREROUTING -d 5.199.130.141 -p tcp --dport 53 -j DNAT --to-destination 192.168.1.22:53
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.22 --dport 53 -j ACCEPT
+#	$IPT -w -t nat -A PREROUTING -d 5.199.130.141 -p udp --dport 853 -j DNAT --to-destination 192.168.1.22:853
+#	$IPT -w -A FORWARD -p udp -d 192.168.1.22 --dport 853 -j ACCEPT
+	$IPT -w -t nat -A PREROUTING -d 5.199.130.141 -p tcp --dport 853 -j DNAT --to-destination 192.168.1.22:853
+	$IPT -w -A FORWARD -p tcp -d 192.168.1.22 --dport 853 -j ACCEPT
+	#
+	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.22 -j SNAT --to 5.199.130.141
+
 	#
 	# MAIL ()
 	# => apache2 proxy (http/https)
@@ -248,8 +260,6 @@ if [ "$1" = "start" ]; then
 
 	# 0x0
 	# => apache2 proxy (http/https)
-	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 9999 -j DNAT --to-destination 192.168.1.15:9999
-	$IPT -w -A FORWARD -p tcp -d 192.168.1.15 --dport 9999 -j ACCEPT
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.15 -j SNAT --to 89.163.145.170
 
 	# rss

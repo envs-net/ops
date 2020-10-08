@@ -6,6 +6,8 @@
 89.163.145.170	envs.net core core.envs.net ve423.venus.dedi.server-hosting.expert ve423
 5.199.136.30	ssh.envs.net
 
+168.119.12.180	srv01.envs.net
+
 # The following lines are desirable for IPv6 capable hosts
 ::1     localhost ip6-localhost ip6-loopback
 ff02::1 ip6-allnodes
@@ -15,7 +17,7 @@ ff02::2 ip6-allrouters
 # ENVS.NET - LXC
 #
 
-192.168.1.2   ns1.envs.net ns1 dns
+192.168.1.2   ns1.envs.net ns1
 192.168.1.3   mail.envs.net mail 
 192.168.1.4   lists.envs.net lists
 192.168.1.5   ldap.envs.net ldap
@@ -26,9 +28,13 @@ ff02::2 ip6-allrouters
 192.168.1.12  cryptpad pad.envs.net pad cryptpad
 192.168.1.13  drone.envs.net drone
 192.168.1.14  matrix.envs.net matrix element.envs.net element lag.envs.net lag riot.envs.net riot dimension.envs.net dimension
+#168.119.12.180 matrix.envs.net matrix element.envs.net element lag.envs.net lag riot.envs.net riot dimension.envs.net dimension
 
-192.168.1.15  envs.sh 0x0.envs.net null.envs.net 0x0 null tb.envs.net tb termbin.envs.net termbin
+192.168.1.15  envs.sh 0x0.envs.net 0x0 null.envs.net null ix.envs.net io.envs.net
 192.168.1.16  rss.envs.net rss
 192.168.1.17  pb.envs.net pb pastebin.envs.net pastbin bin.envs.net bin
 192.168.1.18  pleroma.envs.net pleroma social halcyon.envs.net halcyon
+#144.76.146.17  pleroma.envs.net pleroma social halcyon.envs.net halcyon
 192.168.1.19  jitsi.envs.net jitsi meet.envs.net meet
+
+192.168.1.22  dns.envs.net pubdns
