@@ -7,8 +7,8 @@ cool things to do while you're here on envs.net:
 * envs        - manage your users_info.json entrys and user-submitted scripts
 * pb          - command line pastebin - see https://envs.sh and man pb
 * gomuks      - a terminal based matrix client written in go
-* weechat     - the extensible chat client
-* webirc      - add your webchat account for our thelounge
+* weechat     - the extensible irc chat client
+* webirc      - add your web-irc-chat account for our thelounge
 * neomutt     - default @envs.net command line mail client
 * clinte      - community notices system
 * bbj         - forum - command line bbs (bulletin butter and jelly)
