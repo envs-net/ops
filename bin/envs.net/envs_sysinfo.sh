@@ -30,7 +30,7 @@ readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre dmd-compiler elixir erlang flex
     g++ gcc gcl gdc gforth ghc go golang guile-2.2 inform julia lua5.1 lua5.2 lua5.3 mono-complete
-    nasm nim nodejs octave perl php picolisp ponyc python python2.7 python3 racket ruby rustc scala tcl yasm vlang)
+    nasm nim nodejs octave perl php picolisp ponyc python python2.7 python3 python3.8 racket ruby rustc scala tcl yasm vlang)
 readarray -t sorted_coding_pkg < <(printf '%s\n' "${coding_pkg[@]}" | sort)
 
 
@@ -64,6 +64,7 @@ custom_pkg_desc() {
     goaccess)    pkg_desc='fast web log analyzer and interactive viewer';;
     micro)       pkg_desc='a new modern terminal-based text editor';;
     pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
+    python3.8)   pkg_desc="$(get_pkg_desc python3)";;
     twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
     txtnish)     pkg_desc='A twtxt client with minimal dependencies';;
     vf1)         pkg_desc='Command line gopher client. High speed, low drag.';;
@@ -72,6 +73,13 @@ custom_pkg_desc() {
 
     *) _no_custom_pkg='1' ;;
   esac
+}
+
+get_pkg_desc() {
+  local pkg="$1"
+  [ -z "$pkg_desc" ] && pkg_desc="$(apt-cache show "$pkg" | awk '/Description-en/ {print substr($0, index($0,$2))}' | head -1)"
+  [ -z "$pkg_desc" ] && pkg_desc="$(apt-cache search ^"$pkg"$ | awk '{print substr($0, index($0,$3))}' | head -1)"
+  [ -z "$pkg_desc" ] && pkg_desc='n.a.'
 }
 
 
@@ -119,7 +127,7 @@ cat<<EOM > "$TMP_JSON"
     },
     "system": {
       "os":           "$(lsb_release -sd)",
-      "uptime":       "$(UP=$(uptime -p) ; echo ${UP//up/})",
+      "uptime":       "$(UP=$(uptime -p) ; echo "${UP//up/}")",
       "uname":        "$(uname -a)",
       "board":        "$(hostnamectl status | awk '/Chassis/ {print $2}')",
       "cpuinfo":      "$(awk '/system type|model name/{gsub(/^.*:[ ]*/,"");print $0;exit}' /proc/cpuinfo)",
@@ -148,7 +156,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "element-web": {
         "desc":        "universal secure chat app for matrix (web-client)",
-        "version":     "$(cat /var/lib/lxc/matrix/rootfs/opt/Riot/resources/webapp/version)",
+        "version":     "$(curl -fs https://element."$DOMAIN"/version)",
         "url":         "https://element.envs.net/"
       },
       "getwtxt": {
@@ -158,7 +166,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "gitea": {
         "desc":        "painless self-hosted git service written in go",
-        "version":     "$(lxc-attach -n gitea -- bash -c "gitea --version | awk '{print \$3}'")",
+        "version":     "$(curl -fs https://git."$DOMAIN"/api/v1/version | jq -Mr .version)",
         "url":         "https://git.envs.net/"
       },
       "gophernicus": {
@@ -227,6 +235,7 @@ cat<<EOM > "$TMP_JSON"
       "goaccess":     "$(/usr/bin/goaccess -V | awk '/GoAccess/ {print $3}')",
       "micro":        "$(/usr/local/bin/micro -version | awk '/Version/ {print $2}')",
       "pb":           "$(/usr/local/bin/pb -v)",
+      "python3.8":    "$(/usr/local/bin/python3.8 --version | awk '{print $2}')",
       "twtxt":        "$(/usr/local/bin/twtxt --version | awk '/version/ {printf $3}')",
       "txtnish":      "$(/usr/local/bin/txtnish -V)",
       "vf1":          "$(/usr/local/bin/vf1 --version | awk '/VF-1/ {print $2}')",
@@ -259,9 +268,7 @@ print_pkg_info() {
 
   local pkg_desc
   custom_pkg_desc "$pkg"
-  [ -z "$pkg_desc" ] && pkg_desc="$(apt-cache show "$pkg" | awk '/Description-en/ {print substr($0, index($0,$2))}' | head -1)"
-  [ -z "$pkg_desc" ] && pkg_desc="$(apt-cache search ^"$pkg"$ | awk '{print substr($0, index($0,$3))}')"
-  [ -z "$pkg_desc" ] && pkg_desc='n.a.'
+  get_pkg_desc "$pkg"
   # remove description-en string
   pkg_desc="${pkg_desc//Description-en: /}"
   # replace double qoutes with single qoute
@@ -341,7 +348,6 @@ include 'header.php';
 <h1><em>sysinfo</em></h1>
 <pre>
 <em>full data source: <a href="/sysinfo.json">https://$DOMAIN/sysinfo.json</a></em>
-
 <em>status page: <a href="https://status.envs.net/" target="_blank">https://status.envs.net/</a></em>
 
 <em>server admin: <a href="/~creme/">&#126;creme</a></em>
