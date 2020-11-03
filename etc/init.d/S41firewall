@@ -212,10 +212,6 @@ if [ "$1" = "start" ]; then
 	# ldap
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.5 -j SNAT --to 89.163.145.170
 
-	# monitor (prometheus and grafana)
-	# => apache2 proxy (http/https)
-	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.6 -j SNAT --to 89.163.145.170
-
 	# gitea
 	# => apache2 proxy (http/https)
 	$IPT -w -t nat -A PREROUTING -d 5.199.130.141 -p tcp --dport 22 -j DNAT --to-destination 192.168.1.10:22
@@ -238,23 +234,8 @@ if [ "$1" = "start" ]; then
 	$IPT -w -t nat -A POSTROUTING -d 192.168.1.3 -s 192.168.1.13 -j SNAT --to 5.199.130.141
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.13 -j SNAT --to 5.199.130.141
 
-	# matrix
+	# codimd
 	# => apache2 proxy (http/https)
-	#
-	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 8448 -j DNAT --to-destination 192.168.1.14:8448
-	$IPT -w -A FORWARD -p tcp -d 192.168.1.14 --dport 8448 -j ACCEPT
-	# coturn
-	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p udp --dport 3478 -j DNAT --to-destination 192.168.1.14:3478
-	$IPT -w -A FORWARD -p udp -d 192.168.1.14 --dport 3478 -j ACCEPT
-	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 3478 -j DNAT --to-destination 192.168.1.14:3478
-	$IPT -w -A FORWARD -p tcp -d 192.168.1.14 --dport 3478 -j ACCEPT
-	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p udp --dport 5349 -j DNAT --to-destination 192.168.1.14:5349
-	$IPT -w -A FORWARD -p udp -d 192.168.1.14 --dport 5349 -j ACCEPT
-	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 5349 -j DNAT --to-destination 192.168.1.14:5349
-	$IPT -w -A FORWARD -p tcp -d 192.168.1.14 --dport 5349 -j ACCEPT
-	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p udp --dport 64000:65535 -j DNAT --to-destination 192.168.1.14 --sport 64000:65535
-	$IPT -w -A FORWARD -p udp -d 192.168.1.14 --dport 64000:65535 -j ACCEPT
-	#
 	$IPT -w -t nat -A POSTROUTING -d 192.168.1.3 -s 192.168.1.14 -j SNAT --to 89.163.145.170
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.14 -j SNAT --to 89.163.145.170
 
@@ -270,22 +251,6 @@ if [ "$1" = "start" ]; then
 	# pb
 	# => apache2 proxy (http/https)
 	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.17 -j SNAT --to 89.163.145.170
-
-	# pleroma / social
-	# => apache2 proxy (http/https)
-	$IPT -w -t nat -A PREROUTING -d 5.199.136.29 -p tcp --dport 22 -j DNAT --to-destination 192.168.1.18:22
-	$IPT -w -t nat -A PREROUTING -d 5.199.136.29 -p tcp --dport 70 -j DNAT --to-destination 192.168.1.18:7070
-	$IPT -w -t nat -A PREROUTING -d 5.199.136.29 -p tcp --dport 7070 -j DNAT --to-destination 192.168.1.18:7070
-	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p tcp --dport 7070 -j DNAT --to-destination 192.168.1.18:7070
-	$IPT -w -t nat -A POSTROUTING -d 192.168.1.3 -s 192.168.1.18 -j SNAT --to 5.199.136.29
-	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.18 -j SNAT --to 5.199.136.29
-
-	# jitsi
-	# => apache2 proxy (http/https)
-#	$IPT -w -t nat -A PREROUTING -d 89.163.145.170 -p udp --dport 10000:20000 -j DNAT --to-destination 192.168.1.19 --sport 10000:20000
-#	$IPT -w -A FORWARD -p udp -d 192.168.1.19 --dport 10000:20000 -j ACCEPT
-#	$IPT -w -t nat -A POSTROUTING -d 192.168.1.3 -s 192.168.1.19 -j SNAT --to 89.163.145.170
-#	$IPT -w -t nat -A POSTROUTING ! -d 192.168.1.0/24 -s 192.168.1.19 -j SNAT --to 89.163.145.170
 
 
 	# MASQUERADE.
@@ -366,8 +331,8 @@ if [ "$1" = "start" ]; then
 	$IPT -w -A INPUT -m state --state NEW -d 192.168.1.1 -p tcp --dport 53 -j ACCEPT
 
 	# prometheus node
-	$IPT -w -A INPUT -m state --state NEW -d 192.168.1.1 -s 192.168.1.6 -p tcp --dport 9100 -j ACCEPT
-	$IPT -w -A INPUT -m state --state NEW -d 192.168.1.1 -s 192.168.1.6 -p tcp --dport 9113 -j ACCEPT
+	$IPT -w -A INPUT -m state --state NEW -d 89.163.145.170 -s 144.76.146.17 -p tcp --dport 9100 -j ACCEPT
+	$IPT -w -A INPUT -m state --state NEW -d 89.163.145.170 -s 144.76.146.17 -p tcp --dport 9113 -j ACCEPT
 
 	# finger
 	$IPT -w -A INPUT -m state --state NEW -d 89.163.145.170 -p tcp --dport 79 -j ACCEPT

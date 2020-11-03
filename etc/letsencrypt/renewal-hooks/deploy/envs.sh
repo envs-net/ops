@@ -13,27 +13,11 @@ for domain in $RENEWED_DOMAINS; do
 			cat "$RENEWED_LINEAGE/fullchain.pem" > "$daemon_cert_root/fullchain.pem"
 			cat /etc/ssl/certs/envs_dhparam.pem > "$daemon_cert_root/envs_dhparam.pem"
 
-			#rsync -av --numeric-ids "$daemon_cert_root" root@srv01.envs.net:/opt/ssl_certs/
-			#ssh root@srv01.envs.net bash -c "/opt/sync_certs.sh"
-
-			# matrix
-			matrix_dir=/var/lib/lxc/matrix/rootfs/etc/matrix-synapse
-			cp "$daemon_cert_root/privkey.pem" "$matrix_dir"/
-			cp "$daemon_cert_root/chain.pem" "$matrix_dir"/
-			cp "$daemon_cert_root/fullchain.pem" "$matrix_dir"/
-			chmod 644 "$matrix_dir"/*.pem
-			chown 108:0 "$matrix_dir"/*.pem
-			lxc-attach -n matrix -- bash -c "systemctl reload nginx ; systemctl restart coturn"
-
-			# pleroma
-			lxc-attach -n pleroma -- bash -c "systemctl reload nginx"
-
-			# monitor
-			lxc-attach -n moni -- bash -c "systemctl reload nginx"
+#			rsync -av "$daemon_cert_root" root@srv01.envs.net:/opt/ssl_certs/
+#			ssh root@srv01.envs.net bash -c "/opt/sync_certs.sh"
 
 			# mail
 			# has a own letencrypt cert in container!
-			##lxc-attach -n mail -- bash -c "systemctl reload nginx postfix dovecot"
 
 			# mailinglists
 			lxc-attach -n lists -- bash -c "systemctl reload nginx postfix"
@@ -43,6 +27,9 @@ for domain in $RENEWED_DOMAINS; do
 
 			# drone-ci
 			lxc-attach -n drone -- bash -c "systemctl reload nginx"
+
+			# codimd
+			lxc-attach -n codimd -- bash -c "systemctl reload nginx"
 
 			# searx
 			lxc-attach -n searx -- bash -c "systemctl reload nginx"
@@ -65,9 +52,7 @@ for domain in $RENEWED_DOMAINS; do
 			cat "$RENEWED_LINEAGE/fullchain.pem" > "$daemon_cert_root/fullchain.pem"
 			cat /etc/ssl/certs/envs_dhparam.pem > "$daemon_cert_root/envs_dhparam.pem"
 
-			#rsync -av --numeric-ids "$daemon_cert_root" root@srv01.envs.net:/opt/ssl_certs/
-
-			# 0x0 / fiche
+			# 0x0
 			lxc-attach -n null -- bash -c "systemctl reload nginx"
 		;;
 
