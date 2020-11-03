@@ -11,8 +11,8 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad drone element-web getwtxt gitea gophernicus halcyon ipinfo jetforce mariadb-server matrix nginx
-    openssh-server pleroma privatebin searx tt-rss thelounge znc)
+services=(0x0 bbj codimd cryptpad drone element-web getwtxt gitea gophernicus ipinfo jetforce
+    mariadb-server matrix nginx openssh-server pleroma privatebin searx tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -126,8 +126,8 @@ cat<<EOM > "$TMP_JSON"
       "ED25519":      "SHA256:V+mXTsRJ+jfJMxxPlD/28dpWouuns3Wuqwppv6ykVC8"
     },
     "system": {
-      "os":           "$(lsb_release -sd)",
-      "uptime":       "$(UP=$(uptime -p) ; echo "${UP//up/}")",
+      "os":           "$(lsb_release -ds)",
+      "uptime":       "$(UP=$(uptime -p) ; echo "${UP//up /}")",
       "uname":        "$(uname -a)",
       "board":        "$(hostnamectl status | awk '/Chassis/ {print $2}')",
       "cpuinfo":      "$(awk '/system type|model name/{gsub(/^.*:[ ]*/,"");print $0;exit}' /proc/cpuinfo)",
@@ -137,92 +137,110 @@ cat<<EOM > "$TMP_JSON"
       "0x0": {
         "desc":        "the null pointer - file hosting and url shortener",
         "version":     "-",
-        "url":         "https://envs.sh/"
+        "url":         "https://envs.sh/",
+        "server":      "core.envs.net"
       },
       "bbj": {
         "desc":        "bulletin butter & jelly: an http bulletin board server for small communities",
         "version":     "-",
-        "url":         "https://bbj.envs.net/"
+        "url":         "https://bbj.envs.net/",
+        "server":      "core.envs.net"
+      },
+      "codimd": {
+        "desc":        "collaborative real time markdown",
+        "version":     "$(w3m -dump -T text/html https://codimd."$DOMAIN"/s/version | sed -n '2,2 p' | awk '{printf $2}')",
+        "url":         "https://codimd.envs.net/",
+        "server":      "core.envs.net"
       },
       "cryptpad": {
         "desc":        "collaborative real time editing",
         "version":     "$(curl -fs https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
-        "url":         "https://pad.envs.net/"
+        "url":         "https://pad.envs.net/",
+        "server":      "core.envs.net"
       },
       "drone": {
         "desc":        "continuous delivery platform",
         "version":     "$(curl -fs https://drone."$DOMAIN"/version | jq -Mr .version)",
-        "url":         "https://drone.envs.net/"
+        "url":         "https://drone.envs.net/",
+        "server":      "core.envs.net"
       },
       "element-web": {
         "desc":        "universal secure chat app for matrix (web-client)",
         "version":     "$(curl -fs https://element."$DOMAIN"/version)",
-        "url":         "https://element.envs.net/"
+        "url":         "https://element.envs.net/",
+        "server":      "srv01.envs.net"
       },
       "getwtxt": {
         "desc":        "twtxt registry service - microblogging for hackers",
         "version":     "$(curl -fs https://twtxt."$DOMAIN"/api/plain/version | awk -Fv '{print $2}')",
-        "url":         "https://twtxt.envs.net/"
+        "url":         "https://twtxt.envs.net/",
+        "server":      "core.envs.net"
       },
       "gitea": {
         "desc":        "painless self-hosted git service written in go",
         "version":     "$(curl -fs https://git."$DOMAIN"/api/v1/version | jq -Mr .version)",
-        "url":         "https://git.envs.net/"
+        "url":         "https://git.envs.net/",
+        "server":      "core.envs.net"
       },
       "gophernicus": {
         "desc":        "modern full-featured (and hopefully) secure gopher daemon",
         "version":     "$(/usr/sbin/gophernicus -v | sed 's/Gophernicus\///' | awk '{print $1}')",
-        "url":         "gopher://envs.net/"
-      },
-      "halcyon": {
-        "desc":        "webclient for mastodon and pleroma which looks like twitter",
-        "version":     "$(cat /var/lib/lxc/pleroma/rootfs/var/www/halcyon/version.txt)",
-        "url":         "https://halcyon.envs.net/"
+        "url":         "gopher://envs.net/",
+        "server":      "core.envs.net"
       },
       "ipinfo": {
         "desc":        "ip address info",
         "version":     "-",
-        "url":         "https://ip.envs.net/"
+        "url":         "https://ip.envs.net/",
+        "server":      "core.envs.net"
       },
       "jetforce": {
         "desc":        "tcp server for the gemini protocol",
         "version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
-        "url":         "gemini://envs.net/"
+        "url":         "gemini://envs.net/",
+        "server":      "core.envs.net"
       },
       "matrix": {
         "desc":        "open network for secure, decentralized communication",
         "version":     "$(curl -fs https://matrix."$DOMAIN"/_matrix/federation/v1/version | jq -Mr .server.version)",
-        "url":         "https://matrix.envs.net/"
+        "url":         "https://matrix.envs.net/",
+        "server":      "srv01.envs.net"
       },
       "pleroma": {
         "desc":        "federated social network - microblogging",
         "version":     "$(curl -fs https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
-        "url":         "https://pleroma.envs.net/"
+        "url":         "https://pleroma.envs.net/",
+        "server":      "srv01.envs.net"
       },
       "privatebin": {
         "desc":        "graphical pastebin",
         "version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed '$ s/*$//'")",
-        "url":         "https://pb.envs.net/"
+        "url":         "https://pb.envs.net/",
+        "server":      "core.envs.net"
       },
       "searx": {
         "desc":        "privacy-respecting metasearch engine",
         "version":     "$(curl -fs https://searx."$DOMAIN"/config | jq -Mr .version)",
-        "url":         "https://searx.envs.net/"
+        "url":         "https://searx.envs.net/",
+        "server":      "core.envs.net"
       },
       "thelounge": {
         "desc":        "self-hosted web irc client",
         "version":     "$(sudo -u thelounge /srv/thelounge/.yarn/bin/thelounge -v | awk -Fv '{print $2}')",
-        "url":         "https://webirc.envs.net/"
+        "url":         "https://webirc.envs.net/",
+        "server":      "core.envs.net"
       },
       "tt-rss": {
         "desc":        "tiny tiny rss - web-based news feed (rss/atom) aggregator",
         "version":     "$(lxc-attach -n rss -- bash -c "dpkg -s tt-rss | awk '/Version:/ {print \$2}' | head -n1")",
-        "url":         "https://rss.envs.net/"
+        "url":         "https://rss.envs.net/",
+        "server":      "core.envs.net"
       },
       "znc": {
         "desc":        "advanced modular irc bouncer",
         "version":     "$(dpkg -s znc | awk '/Version:/ {print $2}' | head -n1)",
-        "url":         "https://znc.envs.net/"
+        "url":         "https://znc.envs.net/",
+        "server":      "core.envs.net"
       }
     },
     "packages": {
@@ -325,6 +343,24 @@ print_category() {
   printf '\t</table>\n</details>\n<p></p>\n'
 }
 
+print_srv_services() {
+  local srv="${1}.envs.net"
+  shift
+  local arr=("$@")
+
+  for service in "${arr[@]}"; do
+    local srv_service
+    srv_service="$(jq -Mr '.data.services."'"$service"'".server|select (.!=null)' "$JSON_FILE")"
+
+    local s_url
+    s_url="$(jq -Mr '.data.services."'"$service"'".url|select (.!=null)' "$JSON_FILE")"
+
+    if [ "$srv_service" = "$srv" ]; then
+      printf '<a href="%s" target="_blank">%s</a> ' "$s_url" "$service"
+    fi
+  done
+}
+
 
 cat<<EOM > /tmp/sysinfo.php_tmp
 <?php
@@ -332,6 +368,18 @@ cat<<EOM > /tmp/sysinfo.php_tmp
 // this files is generated by /usr/local/bin/envs.net/envs_sysinfo.sh
   \$title = "$DOMAIN | sysinfo";
   \$desc = "$DOMAIN | sysinfo";
+
+  $date = new DateTime(null, new DateTimeZone('Etc/UTC'));
+  $datetime = $date->format('l, d. F Y - h:i:s A (e)');
+
+  $local_hostname = shell_exec("hostname");
+  $local_os = shell_exec("lsb_release -ds");
+  $local_load = '';
+  foreach (sys_getloadavg() as $value) { $local_load .= number_format($value, 2) . " "; } ;
+  $local_load = trim($local_load);
+  $local_ds = number_format(disk_total_space("/") / 1073741824, 2);
+  $local_ds_free = number_format(disk_free_space("/") / 1073741824, 2);
+  $local_ds_used = "$local_ds" - "$local_ds_free";
 
 include 'header.php';
 ?>
@@ -352,6 +400,27 @@ include 'header.php';
 
 <em>server admin: <a href="/~creme/">&#126;creme</a></em>
 </pre>
+<p></p>
+</div>
+
+<div class="block">
+<pre><strong><i class="fa fa-gear fa-fw" aria-hidden="true"></i> SYSTEM INFO</strong></pre>
+<table>
+  <tr><th class="tw110"></th> <th></th></tr>
+  <tr><td>time:</td> <td><?=\$datetime?></td></tr>
+  <tr><td>&nbsp;</td> <td></td></tr>
+  <tr><td><strong><?=\$local_hostname?></strong></td> <td></td></tr>
+  <tr><td>os:</td> <td><?=\$local_os?></td></tr>
+  <tr><td>load:</td> <td><?=\$local_load?></td></tr>
+  <tr><td>disk space:</td> <td>2x1TB ssd</td></tr>
+  <tr><td></td> <td>used: <?=\$local_ds_used?>GB &#124; free: <?=\$local_ds_free?>GB</td></tr>
+  <tr><td>services:</td> <td>$(print_srv_services 'core' "${sorted_services[@]}")</td></tr>
+  <tr><td><hr></td> <td><hr></td></tr>
+  <tr><td><strong>srv01.envs.net</strong></td> <td></td></tr>
+  <tr><td>os:</td> <td>Debian GNU/Linux 10 (buster)</td></tr>
+  <tr><td>disk space:</td> <td>2x1TB ssd-nvme | 2x8TB hdd (media storage)</td></tr>
+  <tr><td>services:</td> <td>$(print_srv_services 'srv01' "${sorted_services[@]}")</td></tr>
+</table>
 <p></p>
 </div>
 
