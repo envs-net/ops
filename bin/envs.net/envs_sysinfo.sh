@@ -369,17 +369,17 @@ cat<<EOM > /tmp/sysinfo.php_tmp
   \$title = "$DOMAIN | sysinfo";
   \$desc = "$DOMAIN | sysinfo";
 
-  $date = new DateTime(null, new DateTimeZone('Etc/UTC'));
-  $datetime = $date->format('l, d. F Y - h:i:s A (e)');
+  \$date = new DateTime(null, new DateTimeZone('Etc/UTC'));
+  \$datetime = \$date->format('l, d. F Y - h:i:s A (e)');
 
-  $local_hostname = shell_exec("hostname");
-  $local_os = shell_exec("lsb_release -ds");
-  $local_load = '';
-  foreach (sys_getloadavg() as $value) { $local_load .= number_format($value, 2) . " "; } ;
-  $local_load = trim($local_load);
-  $local_ds = number_format(disk_total_space("/") / 1073741824, 2);
-  $local_ds_free = number_format(disk_free_space("/") / 1073741824, 2);
-  $local_ds_used = "$local_ds" - "$local_ds_free";
+  \$local_hostname = shell_exec("hostname");
+  \$local_os = shell_exec("lsb_release -ds");
+  \$local_load = '';
+  foreach (sys_getloadavg() as \$value) { \$local_load .= number_format(\$value, 2) . " "; } ;
+  \$local_load = trim(\$local_load);
+  \$local_ds = number_format(disk_total_space("/") / 1073741824, 2);
+  \$local_ds_free = number_format(disk_free_space("/") / 1073741824, 2);
+  \$local_ds_used = "\$local_ds" - "\$local_ds_free";
 
 include 'header.php';
 ?>
