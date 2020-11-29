@@ -33,11 +33,11 @@ we are linux lovers, sysadmins, programmer and users who like build
 webpages, write blogs, chat online, play cool console games and so much
 more. you wish to join with an small user space?
 
-=> https://envs.net/signup/ signup for a envs.net account (html)
+=> https://envs.net/signup/ signup for a envs.net account
 
 visit us in gopher and html lands for more info.
-=> https://envs.net website (html)
-=> gopher://envs.net gophermap (gopher)
+=> https://envs.net website
+=> gopher://envs.net gophermap
 
 
 here is a list of our esteemed users:

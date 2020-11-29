@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj codimd cryptpad drone element-web getwtxt gitea gophernicus ipinfo jetforce
+services=(0x0 bbj codimd cryptpad drone element-web getwtxt gitea gophernicus ipinfo jetforce jitsi
     mariadb-server matrix nginx openssh-server pleroma privatebin searx tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -115,7 +115,8 @@ cat<<EOM > "$TMP_JSON"
       "maintainer":   "Sven Kinne (~creme) - creme@envs.net",
       "website":      "https://$DOMAIN",
       "signup_url":   "https://$DOMAIN/signup/",
-      "gopher":       "gopher://envs.net/",
+      "gopher":       "gopher://$DOMAIN/",
+      "gemini":       "gemini://$DOMAIN/",
       "email":        "hostmaster@$DOMAIN",
       "admin_email":  "sudoers@$DOMAIN",
       "user_count":   $(find /home -mindepth 1 -maxdepth 1 | wc -l)
@@ -126,121 +127,137 @@ cat<<EOM > "$TMP_JSON"
       "ED25519":      "SHA256:V+mXTsRJ+jfJMxxPlD/28dpWouuns3Wuqwppv6ykVC8"
     },
     "system": {
-      "os":           "$(lsb_release -ds)",
-      "uptime":       "$(UP=$(uptime -p) ; echo "${UP//up /}")",
-      "uname":        "$(uname -a)",
-      "board":        "$(hostnamectl status | awk '/Chassis/ {print $2}')",
-      "cpuinfo":      "$(awk '/system type|model name/{gsub(/^.*:[ ]*/,"");print $0;exit}' /proc/cpuinfo)",
-      "cpucount":     "$(grep -c ^processor /proc/cpuinfo)"
+      "core.$DOMAIN": {
+        "os":           "$(/opt/sysinfo.sh get os)",
+        "uptime":       "$(/opt/sysinfo.sh get uptime)",
+        "uname":        "$(/opt/sysinfo.sh get uname)",
+        "board":        "$(/opt/sysinfo.sh get board)",
+        "cpuinfo":      "$(/opt/sysinfo.sh get cpuinfo)",
+        "cpucount":     "$(/opt/sysinfo.sh get cpucount)"
+      },
+      "srv01.$DOMAIN": {
+        "os":           "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get os')",
+        "uptime":       "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get uptime')",
+        "uname":        "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get uname')",
+        "board":        "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get board')",
+        "cpuinfo":      "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get cpuinfo')",
+        "cpucount":     "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get cpucount')"
+      }
     },
     "services": {
       "0x0": {
         "desc":        "the null pointer - file hosting and url shortener",
         "version":     "-",
         "url":         "https://envs.sh/",
-        "server":      "core.envs.net"
+        "server":      "core.$DOMAIN"
       },
       "bbj": {
         "desc":        "bulletin butter & jelly: an http bulletin board server for small communities",
         "version":     "-",
-        "url":         "https://bbj.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://bbj.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "codimd": {
         "desc":        "collaborative real time markdown",
         "version":     "$(w3m -dump -T text/html https://codimd."$DOMAIN"/s/version | sed -n '2,2 p' | awk '{printf $2}')",
-        "url":         "https://codimd.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://codimd.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "cryptpad": {
         "desc":        "collaborative real time editing",
         "version":     "$(curl -fs https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
-        "url":         "https://pad.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://pad.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "drone": {
         "desc":        "continuous delivery platform",
         "version":     "$(curl -fs https://drone."$DOMAIN"/version | jq -Mr .version)",
-        "url":         "https://drone.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://drone.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "element-web": {
         "desc":        "universal secure chat app for matrix (web-client)",
         "version":     "$(curl -fs https://element."$DOMAIN"/version)",
-        "url":         "https://element.envs.net/",
-        "server":      "srv01.envs.net"
+        "url":         "https://element.$DOMAIN/",
+        "server":      "srv01.$DOMAIN"
       },
       "getwtxt": {
         "desc":        "twtxt registry service - microblogging for hackers",
         "version":     "$(curl -fs https://twtxt."$DOMAIN"/api/plain/version | awk -Fv '{print $2}')",
-        "url":         "https://twtxt.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://twtxt.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "gitea": {
         "desc":        "painless self-hosted git service written in go",
         "version":     "$(curl -fs https://git."$DOMAIN"/api/v1/version | jq -Mr .version)",
-        "url":         "https://git.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://git.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "gophernicus": {
         "desc":        "modern full-featured (and hopefully) secure gopher daemon",
         "version":     "$(/usr/sbin/gophernicus -v | sed 's/Gophernicus\///' | awk '{print $1}')",
-        "url":         "gopher://envs.net/",
-        "server":      "core.envs.net"
+        "url":         "gopher://$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "ipinfo": {
         "desc":        "ip address info",
         "version":     "-",
-        "url":         "https://ip.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://ip.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "jetforce": {
         "desc":        "tcp server for the gemini protocol",
         "version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
-        "url":         "gemini://envs.net/",
-        "server":      "core.envs.net"
+        "url":         "gemini://$DOMAIN/",
+        "server":      "core.$DOMAIN"
+      },
+      "jitsi": {
+        "desc":        "secure, simple and scalable video conferences that you use as a standalone app or embed in your web application.",
+        "version":     "-",
+        "url":         "https://jitsi.$DOMAIN/",
+        "server":      "srv01.$DOMAIN"
       },
       "matrix": {
         "desc":        "open network for secure, decentralized communication",
         "version":     "$(curl -fs https://matrix."$DOMAIN"/_matrix/federation/v1/version | jq -Mr .server.version)",
-        "url":         "https://matrix.envs.net/",
-        "server":      "srv01.envs.net"
+        "url":         "https://matrix.$DOMAIN/",
+        "server":      "srv01.$DOMAIN"
       },
       "pleroma": {
         "desc":        "federated social network - microblogging",
         "version":     "$(curl -fs https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
-        "url":         "https://pleroma.envs.net/",
-        "server":      "srv01.envs.net"
+        "url":         "https://pleroma.$DOMAIN/",
+        "server":      "srv01.$DOMAIN"
       },
       "privatebin": {
         "desc":        "graphical pastebin",
         "version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed '$ s/*$//'")",
-        "url":         "https://pb.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://pb.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "searx": {
         "desc":        "privacy-respecting metasearch engine",
         "version":     "$(curl -fs https://searx."$DOMAIN"/config | jq -Mr .version)",
-        "url":         "https://searx.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://searx.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "thelounge": {
         "desc":        "self-hosted web irc client",
         "version":     "$(sudo -u thelounge /srv/thelounge/.yarn/bin/thelounge -v | awk -Fv '{print $2}')",
-        "url":         "https://webirc.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://webirc.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "tt-rss": {
         "desc":        "tiny tiny rss - web-based news feed (rss/atom) aggregator",
         "version":     "$(lxc-attach -n rss -- bash -c "dpkg -s tt-rss | awk '/Version:/ {print \$2}' | head -n1")",
-        "url":         "https://rss.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://rss.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       },
       "znc": {
         "desc":        "advanced modular irc bouncer",
         "version":     "$(dpkg -s znc | awk '/Version:/ {print $2}' | head -n1)",
-        "url":         "https://znc.envs.net/",
-        "server":      "core.envs.net"
+        "url":         "https://znc.$DOMAIN/",
+        "server":      "core.$DOMAIN"
       }
     },
     "packages": {
@@ -374,12 +391,6 @@ cat<<EOM > /tmp/sysinfo.php_tmp
 
   \$local_hostname = shell_exec("hostname");
   \$local_os = shell_exec("lsb_release -ds");
-  \$local_load = '';
-  foreach (sys_getloadavg() as \$value) { \$local_load .= number_format(\$value, 2) . " "; } ;
-  \$local_load = trim(\$local_load);
-  \$local_ds = number_format(disk_total_space("/") / 1073741824, 2);
-  \$local_ds_free = number_format(disk_free_space("/") / 1073741824, 2);
-  \$local_ds_used = "\$local_ds" - "\$local_ds_free";
 
 include 'header.php';
 ?>
@@ -411,9 +422,7 @@ include 'header.php';
   <tr><td>&nbsp;</td> <td></td></tr>
   <tr><td><strong><?=\$local_hostname?></strong></td> <td></td></tr>
   <tr><td>os:</td> <td><?=\$local_os?></td></tr>
-  <tr><td>load:</td> <td><?=\$local_load?></td></tr>
   <tr><td>disk space:</td> <td>2x1TB ssd</td></tr>
-  <tr><td></td> <td>used: <?=\$local_ds_used?>GB &#124; free: <?=\$local_ds_free?>GB</td></tr>
   <tr><td>services:</td> <td>$(print_srv_services 'core' "${sorted_services[@]}")</td></tr>
   <tr><td><hr></td> <td><hr></td></tr>
   <tr><td><strong>srv01.envs.net</strong></td> <td></td></tr>

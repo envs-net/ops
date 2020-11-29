@@ -73,7 +73,8 @@ cat << EOM > "$TMP_JSON"
       "maintainer":   "Sven Kinne (~creme) - creme@envs.net",
       "website":      "https://$DOMAIN",
       "signup_url":   "https://$DOMAIN/signup/",
-      "gopher":       "gopher://envs.net/",
+      "gopher":       "gopher://$DOMAIN/",
+      "gemini":       "gemini://$DOMAIN/",
       "email":        "hostmaster@$DOMAIN",
       "admin_email":  "sudoers@$DOMAIN",
       "user_count":   $(find /home -mindepth 1 -maxdepth 1 | wc -l)
@@ -110,7 +111,7 @@ EOM
 EOM
         fi
 # website
-        if [ -f "$USER_HOME"/public_html/index.php ] || [ "$(test -f "$USER_HOME"/public_html/index.*htm*; echo $?)" -eq 0 ]; then
+        if [ -f "$USER_HOME"/public_html/index.php ] || [ -f "$USER_HOME"/public_html/index.html ]; then
           cat << EOM >> "$TMP_JSON"
         "website":     "https://$DOMAIN/~$USERNAME/",
 EOM
