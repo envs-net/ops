@@ -27,7 +27,7 @@ Cmnd_Alias	MAKE=/usr/bin/make *
 Cmnd_Alias	MKDOCS=/usr/local/bin/mkdocs *
 
 #
-Cmnd_Alias	THELOUNGE=/bin/bash -c '/srv/thelounge/.yarn/bin/thelounge add $SUDO_USER'
+Cmnd_Alias	THELOUNGE=/bin/bash -c /srv/thelounge/.yarn/bin/thelounge add $SUDO_USER
 #Cmnd_Alias	TOOT=/usr/bin/toot post *
 
 # User privilege specification
