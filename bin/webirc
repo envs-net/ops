@@ -2,6 +2,6 @@
 
 printf 'setting up your thelounge account\n\n'
 
-THELOUNGE_HOME=/srv/thelounge sudo -u thelounge sh -c '/srv/thelounge/.yarn/bin/thelounge add $SUDO_USER'
+THELOUNGE_HOME=/srv/thelounge sudo -u thelounge /bin/bash -c '/srv/thelounge/.yarn/bin/thelounge add $SUDO_USER'
 
 printf '\nyou can now log in to https://webirc.envs.net as %s with the password you just created.\n' "$USER"
