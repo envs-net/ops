@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj codimd cryptpad drone element-web getwtxt gitea gophernicus ipinfo jetforce jitsi
+services=(0x0 bbj cryptpad drone element-web getwtxt gitea gophernicus hedgedoc ipinfo jetforce jitsi
     mariadb-server matrix nginx openssh-server pleroma privatebin searx tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -157,12 +157,6 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://bbj.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
-      "codimd": {
-        "desc":        "collaborative real time markdown",
-        "version":     "$(w3m -dump -T text/html https://codimd."$DOMAIN"/s/version | sed -n '2,2 p' | awk '{printf $2}')",
-        "url":         "https://codimd.$DOMAIN/",
-        "server":      "core.$DOMAIN"
-      },
       "cryptpad": {
         "desc":        "collaborative real time editing",
         "version":     "$(curl -fs https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
@@ -197,6 +191,12 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "modern full-featured (and hopefully) secure gopher daemon",
         "version":     "$(/usr/sbin/gophernicus -v | sed 's/Gophernicus\///' | awk '{print $1}')",
         "url":         "gopher://$DOMAIN/",
+        "server":      "core.$DOMAIN"
+      },
+      "hedgedoc": {
+        "desc":        "collaborative real time markdown",
+        "version":     "$(w3m -dump -T text/html https://hedgedoc."$DOMAIN"/s/version | sed -n '2,2 p' | awk '{printf $2}')",
+        "url":         "https://hedgedoc.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "ipinfo": {
