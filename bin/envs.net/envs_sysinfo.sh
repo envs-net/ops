@@ -189,7 +189,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "gophernicus": {
         "desc":        "modern full-featured (and hopefully) secure gopher daemon",
-        "version":     "$(/usr/sbin/gophernicus -v | sed 's/Gophernicus\///' | awk '{print $1}')",
+        "version":     "$(/usr/local/sbin/gophernicus -v | sed 's/Gophernicus\///' | awk '{print $1}')",
         "url":         "gopher://$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
