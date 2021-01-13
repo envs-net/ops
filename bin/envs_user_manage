@@ -103,7 +103,7 @@ add_user() {
 	sleep 3
 
 	# send readme mail
-	readme_sub="Subject: Welcome ~$user | please readme!"
+	readme_sub="Subject: Welcome $user | please readme!"
 	readme_mail="$head_def\r\nTo: $mailTo\r\nCC: $user@$domain\r\nFrom: sudoers@$domain\r\n$readme_sub"
 
 	echo -e "$readme_mail\r\n$(cat /usr/local/bin/envs.net/welcome-readme.tmpl)" | sendmail "$user"@"$domain" "$mailTo"
@@ -111,7 +111,7 @@ add_user() {
 	sleep 1
 
 	# send welcome mail
-	wel_sub="Subject: Welcome to $domain | ~$user"
+	wel_sub="Subject: Welcome to $domain | $user"
 	wel_mail="$head_def\r\nTo: $mailTo\r\nCC: $user@$domain\r\nFrom: hosting@$domain\r\n$wel_sub"
 
 	echo -e "$wel_mail\r\n$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /usr/local/bin/envs.net/welcome-email.tmpl)" \
