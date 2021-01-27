@@ -14,7 +14,8 @@ ExecStart=/usr/local/bin/jetforce \
     --dir /var/gemini \
     --tls-certfile /etc/letsencrypt/live/envs.net/fullchain.pem \
     --tls-keyfile /etc/letsencrypt/live/envs.net/privkey.pem \
-    --tls-cafile /etc/letsencrypt/live/envs.net/chain.pem
+    --tls-cafile /etc/letsencrypt/live/envs.net/chain.pem \
+    --tls-capath /etc/letsencrypt/archive/envs.net/
 
 [Install]
 WantedBy=default.target
