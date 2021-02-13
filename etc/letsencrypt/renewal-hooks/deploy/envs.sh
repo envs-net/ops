@@ -16,6 +16,12 @@ for domain in $RENEWED_DOMAINS; do
 #			rsync -av "$daemon_cert_root" root@srv01.envs.net:/opt/ssl_certs/
 #			ssh root@srv01.envs.net bash -c "/opt/sync_certs.sh"
 
+			# jetforce
+			systemctl restart jetforce
+
+			# pubdns
+			lxc-attach -n pubdns -- bash -c "systemctl reload nginx"
+
 			# mail
 			# has a own letencrypt cert in container!
 
