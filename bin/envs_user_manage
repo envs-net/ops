@@ -139,6 +139,7 @@ add_user() {
 
 	# setup weechat
 	sed -i s/_username_/"$user"/g /home/"$user"/.weechat/irc.conf
+  chmod 0700 /home/"$user"/.weechat/
 
 	# cleanup /etc/skel/ git stuff from user home
 	rm -rf /home/"$user"/.git /home/"$user"/.drone.yml  /home/"$user"/README.md
