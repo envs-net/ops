@@ -6,6 +6,7 @@
 
 [ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
+TICKS='```'
 
 userlist() {
 	mapfile -t users < <(jq -Mr '.data.users|keys[]' /var/www/envs.net/users_info.json)
@@ -20,12 +21,12 @@ userlist() {
 	done
 }
 
-cat << 'EOM' >> /tmp/index.gmi_tmp
+cat << EOM >> /tmp/index.gmi_tmp
 welcome on envs.net - gemini
-```
+$TICKS
 $(figlet -f smslant envs.net)
                    environments
-```
+$TICKS
 
 envs.net is a minimalist, non-commercial
 shared linux system and will always be free to use.
