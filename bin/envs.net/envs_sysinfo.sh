@@ -208,7 +208,7 @@ cat<<EOM > "$TMP_JSON"
       "jetforce": {
         "desc":        "tcp server for the gemini protocol",
         "version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
-        "url":         "gemini://$DOMAIN/",
+        "url":         "https://gemini.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "jitsi": {
