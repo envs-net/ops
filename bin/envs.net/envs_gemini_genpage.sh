@@ -20,7 +20,7 @@ userlist() {
 	done
 }
 
-cat << EOM >> /tmp/index.gmi_tmp
+cat << 'EOM' >> /tmp/index.gmi_tmp
 welcome on envs.net - gemini
 ```
 $(figlet -f smslant envs.net)
