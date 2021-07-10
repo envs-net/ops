@@ -22,9 +22,10 @@ userlist() {
 
 cat << EOM >> /tmp/index.gmi_tmp
 welcome on envs.net - gemini
+```
 $(figlet -f smslant envs.net)
                    environments
-
+```
 
 envs.net is a minimalist, non-commercial
 shared linux system and will always be free to use.
