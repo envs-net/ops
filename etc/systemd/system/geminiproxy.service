@@ -1,0 +1,16 @@
+[Unit]
+Description=geminiproxy.service kineto
+After=network-online.target nginx.service
+
+[Service]
+Type=simple
+WorkingDirectory=/srv/kineto
+ExecStart=/srv/kineto/kineto -b 127.0.0.1:8994 gemini://envs.net
+User=services
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+[Install]
+WantedBy=default.target
