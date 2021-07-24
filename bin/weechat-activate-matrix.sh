@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cd /opt/services/weechat-matrix-rs/ && make install
-cd "$HOME"
+cp /opt/services/weechat-matrix-rs/target/release/libmatrix.so "$HOME"/.weechat/plugins/matrix.so
+chmod 644 "$HOME"/.weechat/plugins/matrix.so
 
 exit 0
