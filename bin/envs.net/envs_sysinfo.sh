@@ -177,7 +177,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "getwtxt": {
         "desc":        "twtxt registry service - microblogging for hackers",
-        "version":     "$(curl -fs https://twtxt."$DOMAIN"/api/plain/version | awk -Fv '{print $2}')",
+        "version":     "$(curl -fs https://twtxt."$DOMAIN"/api/plain/version | awk '{print $2}')",
         "url":         "https://twtxt.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
@@ -195,13 +195,13 @@ cat<<EOM > "$TMP_JSON"
       },
       "hedgedoc": {
         "desc":        "collaborative real time markdown",
-        "version":     "$(w3m -dump -T text/html https://hedgedoc."$DOMAIN"/s/version | sed -n '2,2 p' | awk '{printf $2}')",
+        "version":     "$(curl -vs https://hedgedoc."$DOMAIN"/ | grep 'hedgedoc-version:' | awk '{print $3}')",
         "url":         "https://hedgedoc.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "hydrogen-web": {
         "desc":        "lightweight matrix client with legacy and mobile browser support",
-        "version":     "-",
+        "version":     "$(curl -fs https://hydrogen."$DOMAIN" | grep HYDROGEN_VERSION | awk '{print $3}' | sed -e 's/"//' -e 's/";//g')",
         "url":         "https://hydrogen.$DOMAIN/",
         "server":      "srv01.$DOMAIN"
       },
@@ -231,7 +231,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "privatebin": {
         "desc":        "graphical pastebin",
-        "version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed '$ s/*$//'")",
+        "version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed 's/*$//'")",
         "url":         "https://pb.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
