@@ -71,7 +71,7 @@ cat << EOM > "$TMP_JSON"
       "description":  "envs.net is a minimalist, non-commercial shared linux system and will always be free to use.",
       "located":      "germany",
       "maintainer":   "Sven Kinne (~creme) - creme@envs.net",
-      "website":      "https://$DOMAIN",
+      "website":      "https://$DOMAIN/",
       "signup_url":   "https://$DOMAIN/signup/",
       "gopher":       "gopher://$DOMAIN/",
       "gemini":       "gemini://$DOMAIN/",

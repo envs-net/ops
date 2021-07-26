@@ -113,7 +113,7 @@ cat<<EOM > "$TMP_JSON"
       "description":  "envs.net is a minimalist, non-commercial shared linux system and will always be free to use.",
       "located":      "germany",
       "maintainer":   "Sven Kinne (~creme) - creme@envs.net",
-      "website":      "https://$DOMAIN",
+      "website":      "https://$DOMAIN/",
       "signup_url":   "https://$DOMAIN/signup/",
       "gopher":       "gopher://$DOMAIN/",
       "gemini":       "gemini://$DOMAIN/",
@@ -195,13 +195,13 @@ cat<<EOM > "$TMP_JSON"
       },
       "hedgedoc": {
         "desc":        "collaborative real time markdown",
-        "version":     "$(w3m -dump -T text/html https://hedgedoc."$DOMAIN"/s/version | sed -n '2,2 p' | awk '{printf $2}')",
+        "version":     "$(curl -Is https://hedgedoc."$DOMAIN"/ | awk '/^hedgedoc-version:/{print $2}'|tr -d "\015")",
         "url":         "https://hedgedoc.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "hydrogen-web": {
         "desc":        "lightweight matrix client with legacy and mobile browser support",
-        "version":     "$(curl -fs https://hydrogen."$DOMAIN"/ | grep HYDROGEN_VERSION | awk '{print $3}' | sed -e 's/"//' -e 's/";//g')",
+        "version":     "$(curl -fs https://hydrogen."$DOMAIN"/ | awk '/HYDROGEN_VERSION/ {print $3}' | sed -e 's/"//' -e 's/";//g')",
         "url":         "https://hydrogen.$DOMAIN/",
         "server":      "srv01.$DOMAIN"
       },
