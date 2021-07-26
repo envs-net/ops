@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad drone element-web getwtxt gitea gophernicus hedgedoc ipinfo jetforce jitsi
+services=(0x0 bbj cryptpad drone element-web getwtxt gitea gophernicus hedgedoc hydrogen ipinfo jetforce
     mariadb-server matrix nginx openssh-server pleroma privatebin searx tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -199,6 +199,12 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://hedgedoc.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
+      "hydrogen-web": {
+        "desc":        "lightweight matrix client with legacy and mobile browser support",
+        "version":     "-",
+        "url":         "https://hydrogen.$DOMAIN/",
+        "server":      "srv01.$DOMAIN"
+      },
       "ipinfo": {
         "desc":        "ip address info",
         "version":     "-",
@@ -210,12 +216,6 @@ cat<<EOM > "$TMP_JSON"
         "version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
         "url":         "https://gemini.$DOMAIN/",
         "server":      "core.$DOMAIN"
-      },
-      "jitsi": {
-        "desc":        "secure, simple and scalable video conferences that you use as a standalone app or embed in your web application.",
-        "version":     "-",
-        "url":         "https://jitsi.$DOMAIN/",
-        "server":      "srv01.$DOMAIN"
       },
       "matrix": {
         "desc":        "open network for secure, decentralized communication",
