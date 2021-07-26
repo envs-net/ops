@@ -195,7 +195,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "hedgedoc": {
         "desc":        "collaborative real time markdown",
-        "version":     "$(curl -vs https://hedgedoc."$DOMAIN"/ | grep 'hedgedoc-version:' | awk '{print $3}')",
+        "version":     "$(curl -vs https://hedgedoc."$DOMAIN"/ 2>&1 | grep 'hedgedoc-version:' | awk '{print $3}')",
         "url":         "https://hedgedoc.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
