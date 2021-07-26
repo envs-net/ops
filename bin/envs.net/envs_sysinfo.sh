@@ -195,13 +195,13 @@ cat<<EOM > "$TMP_JSON"
       },
       "hedgedoc": {
         "desc":        "collaborative real time markdown",
-        "version":     "$(curl -vs https://hedgedoc."$DOMAIN"/ 2>&1 | grep 'hedgedoc-version:' | awk '{print $3}')",
+        "version":     "$(w3m -dump -T text/html https://hedgedoc."$DOMAIN"/s/version | sed -n '2,2 p' | awk '{printf $2}')",
         "url":         "https://hedgedoc.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "hydrogen-web": {
         "desc":        "lightweight matrix client with legacy and mobile browser support",
-        "version":     "$(curl -fs https://hydrogen."$DOMAIN" | grep HYDROGEN_VERSION | awk '{print $3}' | sed -e 's/"//' -e 's/";//g')",
+        "version":     "$(curl -fs https://hydrogen."$DOMAIN"/ | grep HYDROGEN_VERSION | awk '{print $3}' | sed -e 's/"//' -e 's/";//g')",
         "url":         "https://hydrogen.$DOMAIN/",
         "server":      "srv01.$DOMAIN"
       },
