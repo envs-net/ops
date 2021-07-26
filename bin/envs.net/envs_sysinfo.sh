@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad drone element-web getwtxt gitea gophernicus hedgedoc hydrogen ipinfo jetforce
+services=(0x0 bbj cryptpad drone element-web getwtxt gitea gophernicus hedgedoc hydrogen-web ipinfo jetforce
     mariadb-server matrix nginx openssh-server pleroma privatebin searx tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
