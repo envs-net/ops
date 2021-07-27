@@ -59,7 +59,7 @@ for domain in $RENEWED_DOMAINS; do
 			cat /etc/ssl/certs/envs_dhparam.pem > "$daemon_cert_root/envs_dhparam.pem"
 
 			# 0x0
-			lxc-attach -n null -- bash -c "systemctl reload nginx"
+			lxc-attach -n 0x0 -- bash -c "systemctl reload nginx"
 		;;
 
 		znc.envs.net)

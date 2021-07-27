@@ -23,9 +23,9 @@ ff02::2 ip6-allrouters
 
 192.168.1.10	git.envs.net gitea
 192.168.1.11	searx.envs.net searx
-192.168.1.12	cryptpad pad.envs.net pad cryptpad
+192.168.1.12	cryptpad pad.envs.net sandpad.envs.net pad cryptpad sandpad
 192.168.1.13	drone.envs.net drone
-192.168.1.14	codimd.envs.net codimd
+192.168.1.14	codimd.envs.net codimd hedgedoc.envs.net hedgedoc
 192.168.1.15	envs.sh 0x0.envs.net 0x0 null.envs.net null ix.envs.net io.envs.net
 192.168.1.16	rss.envs.net rss
 192.168.1.17	pb.envs.net pb pastebin.envs.net pastbin bin.envs.net bin
