@@ -196,7 +196,7 @@ cat<<EOM > "$TMP_JSON"
       "ffsync": {
         "desc":        "firefox sync server",
         "version":     "$(lxc-attach -n 0x0 -- bash -c "awk '/^Version:/ {print \$2}' /srv/ffsync/syncserver.egg-info/PKG-INFO")",
-        "url":         "https://help.$DOMAIN/tutorials/ffsync/",
+        "url":         "https://ffsync.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "hedgedoc": {
