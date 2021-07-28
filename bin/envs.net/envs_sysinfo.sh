@@ -282,7 +282,7 @@ cat<<EOM > "$TMP_JSON"
       "txtnish":      "$(/usr/local/bin/txtnish -V)",
       "vf1":          "$(/usr/local/bin/vf1 --version | awk '/VF-1/ {print $2}')",
       "vlang":        "$(/usr/local/bin/v --version | awk '/V/ {print $2}')",
-      "ziglang":      "$(/usr/local/bin/zigversion)",
+      "ziglang":      "$(/usr/local/bin/zig version)",
       "zola":         "$(/usr/local/bin/zola -V | awk '/zola/ {print $2}')",
 $(print_pkg_version)
 EOM
