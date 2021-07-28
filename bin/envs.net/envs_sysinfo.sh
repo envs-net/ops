@@ -29,13 +29,13 @@ readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 
 coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre dmd-compiler elixir erlang flex
-    g++ gcc gcl gdc gforth ghc go golang guile-2.2 inform julia lua5.1 lua5.2 lua5.3 mono-complete
-    nasm nim nodejs octave perl php picolisp ponyc python python2.7 python3 python3.8 racket ruby rustc scala tcl yasm vlang)
+    g++ gcc gcl gdc gforth ghc go golang guile-2.2 inform julia lua5.1 lua5.2 lua5.3 mono-complete nasm nim nodejs
+    octave perl php picolisp ponyc python python2.7 python3 python3.8 racket ruby rustc scala tcl yasm vlang ziglang)
 readarray -t sorted_coding_pkg < <(printf '%s\n' "${coding_pkg[@]}" | sort)
 
 
 coding_tools=(ack bison build-essential cl-launch cvs devscripts ecl gawk git gron initscripts jq latex-mk latexmk
-    make mawk mercurial rake ripgrep sbcl shellcheck subversion tcc texlive-full virtualenv yarn)
+    ninja-build make mawk mercurial rake ripgrep sbcl shellcheck subversion tcc texlive-full virtualenv yarn)
 readarray -t sorted_coding_tools < <(printf '%s\n' "${coding_tools[@]}" | sort)
 
 
@@ -69,6 +69,7 @@ custom_pkg_desc() {
     txtnish)     pkg_desc='A twtxt client with minimal dependencies';;
     vf1)         pkg_desc='Command line gopher client. High speed, low drag.';;
     vlang)       pkg_desc='Simple, fast, safe, compiled programming language';;
+    ziglang)     pkg_desc='general-purpose programming language and toolchain for maintaining robust, optimal, and reusable software.';;
     zola)        pkg_desc='single-binary static site generator written in rust';;
 
     *) _no_custom_pkg='1' ;;
@@ -281,6 +282,7 @@ cat<<EOM > "$TMP_JSON"
       "txtnish":      "$(/usr/local/bin/txtnish -V)",
       "vf1":          "$(/usr/local/bin/vf1 --version | awk '/VF-1/ {print $2}')",
       "vlang":        "$(/usr/local/bin/v --version | awk '/V/ {print $2}')",
+      "ziglang":      "$(/usr/local/bin/zigversion)",
       "zola":         "$(/usr/local/bin/zola -V | awk '/zola/ {print $2}')",
 $(print_pkg_version)
 EOM
