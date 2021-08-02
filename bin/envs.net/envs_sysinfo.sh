@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cryptpad drone element-web getwtxt gitea gophernicus ffsync hedgedoc hydrogen-web ipinfo
+services=(0x0 bbj cinny cryptpad drone element-web getwtxt gitea gophernicus ffsync hedgedoc hydrogen-web ipinfo
     jetforce mariadb-server matrix nginx openssh-server pleroma privatebin searx tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -159,6 +159,12 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://bbj.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
+      "cinny": {
+        "desc":        "cinny is a matrix client focusing primarily on simple, elegant and secure interface.",
+        "version":     "-",
+        "url":         "https://cinny.$DOMAIN/",
+        "server":      "srv01.$DOMAIN"
+      },
       "cryptpad": {
         "desc":        "collaborative real time editing",
         "version":     "$(curl -fs https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
@@ -203,7 +209,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "hedgedoc": {
         "desc":        "collaborative real time markdown",
-        "version":     "$(curl -Is https://hedgedoc."$DOMAIN"/ | awk '/^hedgedoc-version:/{print $2}'|tr -d "\015")",
+        "version":     "$(curl -Is https://hedgedoc."$DOMAIN"/ | awk '/^hedgedoc-version:/{print $2}'| tr -d "\015")",
         "url":         "https://hedgedoc.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
