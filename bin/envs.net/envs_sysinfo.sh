@@ -239,7 +239,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "mobilizon": {
         "desc":        "manage your events - gather, organize and mobilize",
-        "version":     "-",
+        "version":     "$(curl -fs https://mobilizon."$DOMAIN"/.well-known/nodeinfo/2.1 | jq -Mr .software.version)",
         "url":         "https://events.$DOMAIN/",
         "server":      "srv01.$DOMAIN"
       },
