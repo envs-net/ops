@@ -240,7 +240,7 @@ cat<<EOM > "$TMP_JSON"
       "mobilizon": {
         "desc":        "manage your events - gather, organize and mobilize",
         "version":     "-",
-        "url":         "https://mobilizon.$DOMAIN/",
+        "url":         "https://events.$DOMAIN/",
         "server":      "srv01.$DOMAIN"
       },
       "pleroma": {
