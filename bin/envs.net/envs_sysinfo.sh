@@ -12,7 +12,7 @@ DOMAIN='envs.net'
 
 # define packages by category for sysinfo.php Page
 services=(0x0 bbj cinny cryptpad drone element-web getwtxt gitea gophernicus ffsync hedgedoc hydrogen-web ipinfo
-    jetforce mariadb-server matrix nginx openssh-server pleroma privatebin searx tt-rss thelounge znc)
+    jetforce mariadb-server matrix mobilizon nginx openssh-server pleroma privatebin searx tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -235,6 +235,12 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "open network for secure, decentralized communication",
         "version":     "$(curl -fs https://matrix."$DOMAIN"/_matrix/federation/v1/version | jq -Mr .server.version)",
         "url":         "https://matrix.$DOMAIN/",
+        "server":      "srv01.$DOMAIN"
+      },
+      "mobilizon": {
+        "desc":        "manage your events - gather, organize and mobilize",
+        "version":     "-",
+        "url":         "https://mobilizon.$DOMAIN/",
         "server":      "srv01.$DOMAIN"
       },
       "pleroma": {
