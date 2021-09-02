@@ -1,9 +1,9 @@
 # DO NOT TOUCH IT HERE SEE GIT REPO 'envs/ops'
 
 # !!! DO NOT SET ALIAS ENVS.NET TO localhost # mail problem !!!
-127.0.0.1		localhost core.envs.net bbj.envs.net gopher.envs.net help.envs.net ip.envs.net ip.envs.sh stats.envs.net ttbp.envs.net twtxt.envs.net webirc.envs.net znc.envs.net
+127.0.0.1		localhost core.envs.net
 
-89.163.145.170	envs.net core core.envs.net ve423.venus.dedi.server-hosting.expert ve423
+89.163.145.170	envs.net core core.envs.net ve423.venus.dedi.server-hosting.expert ve423 bbj.envs.net gopher.envs.net help.envs.net ip.envs.net ip.envs.sh stats.envs.net ttbp.envs.net twtxt.envs.net webirc.envs.net znc.envs.net
 5.199.136.30	ssh.envs.net
 168.119.12.180	srv01.envs.net
 
