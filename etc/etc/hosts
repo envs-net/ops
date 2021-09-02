@@ -3,7 +3,7 @@
 # !!! DO NOT SET ALIAS ENVS.NET TO localhost # mail problem !!!
 127.0.0.1		localhost core.envs.net
 
-89.163.145.170	envs.net core core.envs.net ve423.venus.dedi.server-hosting.expert ve423 bbj.envs.net gopher.envs.net help.envs.net ip.envs.net ip.envs.sh stats.envs.net ttbp.envs.net twtxt.envs.net webirc.envs.net znc.envs.net
+89.163.145.170	envs.net core core.envs.net ve423.venus.dedi.server-hosting.expert ve423 ip.envs.net ip.envs.sh
 5.199.136.30	ssh.envs.net
 168.119.12.180	srv01.envs.net
 
@@ -15,6 +15,7 @@ ff02::2 ip6-allrouters
 #
 # ENVS.NET - LXC
 #
+192.168.1.1		bbj.envs.net gopher.envs.net help.envs.net stats.envs.net ttbp.envs.net twtxt.envs.net webirc.envs.net znc.envs.net
 
 192.168.1.2		ns1.envs.net ns1
 192.168.1.3		mail.envs.net mail 
