@@ -10,7 +10,7 @@ cool things to do while you're here on envs.net:
 * weechat     - the extensible irc chat client
                 weechat-activate-matrix.sh - to activate the matrix-chat plugin
 * webirc      - add your web-irc-chat account for our thelounge
-* neomutt     - default @envs.net command line mail client
+* mutt        - default @envs.net command line mail client
 * clinte      - community notices system
 * bbj         - forum - command line bbs (bulletin butter and jelly)
 * linkulator  - a link aggregator - gopher://envs.net/1/linkulator/
