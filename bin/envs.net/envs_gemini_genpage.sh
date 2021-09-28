@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# envs.net - generate index.gmi
+# envs.net - generate main index.gmi (updates once per hour)
 # - this script is called by /usr/local/bin/envs.net/envs_user_info.sh
 #
 
