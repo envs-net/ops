@@ -173,6 +173,8 @@ EOM
             && ! [[ "$LINE" = 'desc='* ]] && ! [[ "$LINE" = 'ssh_pubkey='* ]]; then
               user_field="${LINE//=*/}"
               user_value="${LINE//*=/}"
+              # remove leading and trailing `"` in user_value
+              user_value="$(echo "$user_value" | sed -e '$ s/^"//' -e '$ s/"$//')"
 
               if ! [[ ":${field_exists[*]}:" =~ $user_field ]]; then
                 # entry will be a single line
