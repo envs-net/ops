@@ -96,6 +96,8 @@ EOM
 # desc
         if [ -f "$INFO_FILE" ]; then
           desc="$(sed -n '/^desc=/{s#^.*=##;p}' "$INFO_FILE")"
+          # remove leading and trailing `"`
+          desc="$(echo "$desc" | sed -e '$ s/^"//' -e '$ s/"$//')"
           if [ -z "$desc" ] || [ "$desc" == 'a short describtion or message' ]; then
             cat << EOM >> "$TMP_JSON"
         "desc":        "",
