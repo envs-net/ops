@@ -18,6 +18,7 @@ DOMAIN="envs.net"
 TMP_JSON='/tmp/users_info.json_tmp'
 
 clear_lastline() { sed -i '$ s/,$//' "$TMP_JSON" ; }
+clear_quote() { echo "$1" | sed -e '$ s/^"//' -e '$ s/"$//' ; }
 
 
 progress_userarray() {
@@ -96,8 +97,7 @@ EOM
 # desc
         if [ -f "$INFO_FILE" ]; then
           desc="$(sed -n '/^desc=/{s#^.*=##;p}' "$INFO_FILE")"
-          # remove leading and trailing `"`
-          desc="$(echo "$desc" | sed -e '$ s/^"//' -e '$ s/"$//')"
+          desc="$(clear_quote "$desc")"
           if [ -z "$desc" ] || [ "$desc" == 'a short describtion or message' ]; then
             cat << EOM >> "$TMP_JSON"
         "desc":        "",
@@ -175,8 +175,7 @@ EOM
             && ! [[ "$LINE" = 'desc='* ]] && ! [[ "$LINE" = 'ssh_pubkey='* ]]; then
               user_field="${LINE//=*/}"
               user_value="${LINE//*=/}"
-              # remove leading and trailing `"` in user_value
-              user_value="$(echo "$user_value" | sed -e '$ s/^"//' -e '$ s/"$//')"
+              user_value="$(clear_quote "$user_value")"
 
               if ! [[ ":${field_exists[*]}:" =~ $user_field ]]; then
                 # entry will be a single line
