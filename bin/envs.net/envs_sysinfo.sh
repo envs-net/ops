@@ -130,6 +130,7 @@ cat<<EOM > "$TMP_JSON"
     },
     "system": {
       "core.$DOMAIN": {
+        "location":     "myloc (Düsseldorf)",
         "os":           "$(/opt/sysinfo.sh get os)",
         "uptime":       "$(/opt/sysinfo.sh get uptime)",
         "uname":        "$(/opt/sysinfo.sh get uname)",
@@ -138,6 +139,7 @@ cat<<EOM > "$TMP_JSON"
         "cpucount":     "$(/opt/sysinfo.sh get cpucount)"
       },
       "srv01.$DOMAIN": {
+        "location":     "Hetzner (Falkenstein)",
         "os":           "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get os')",
         "uptime":       "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get uptime')",
         "uname":        "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get uname')",
@@ -443,11 +445,13 @@ include 'header.php';
   <tr><td>time:</td> <td><?=\$datetime?></td></tr>
   <tr><td>&nbsp;</td> <td></td></tr>
   <tr><td><strong><?=\$local_hostname?></strong></td> <td></td></tr>
+  <tr><td>location:</td> <td>myloc (Düsseldorf)</td></tr>
   <tr><td>os:</td> <td><?=\$local_os?></td></tr>
   <tr><td>disk space:</td> <td>2x1TB ssd</td></tr>
   <tr><td>services:</td> <td>$(print_srv_services 'core' "${sorted_services[@]}")</td></tr>
   <tr><td><hr></td> <td><hr></td></tr>
   <tr><td><strong>srv01.envs.net</strong></td> <td></td></tr>
+  <tr><td>location:</td> <td>Hetzner (Falkenstein)</td></tr>
   <tr><td>os:</td> <td>Debian GNU/Linux 11 (bullseye)</td></tr>
   <tr><td>disk space:</td> <td>2x1TB ssd-nvme | 2x8TB hdd (media storage)</td></tr>
   <tr><td>services:</td> <td>$(print_srv_services 'srv01' "${sorted_services[@]}")</td></tr>
