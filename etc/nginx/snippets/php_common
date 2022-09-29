@@ -8,3 +8,6 @@ if (!-f $request_filename) {
 
 fastcgi_split_path_info ^(.+\.php)(/.+)$;
 fastcgi_pass unix:/run/php/php7.4-fpm.sock;
+fastcgi_connect_timeout 3600;
+fastcgi_send_timeout 3600;
+fastcgi_read_timeout 3600;
