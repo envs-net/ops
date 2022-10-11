@@ -246,7 +246,7 @@ cat<<EOM > "$TMP_JSON"
         "server":      "srv01.$DOMAIN"
       },
       "ntfy": {
-        "desc":        "a simple HTTP-based pub-sub notification service."
+        "desc":        "a simple HTTP-based pub-sub notification service",
         "version":     "-",
         "url":         "https://ntfy.$DOMAIN/",
         "server":      "core.$DOMAIN"
