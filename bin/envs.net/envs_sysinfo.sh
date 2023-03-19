@@ -12,7 +12,7 @@ DOMAIN='envs.net'
 
 # define packages by category for sysinfo.php Page
 services=(0x0 bbj cinny cryptpad drone element-web getwtxt gitea gophernicus ffsync hedgedoc hydrogen-web ipinfo
-    jetforce mariadb-server matrix mobilizon nginx ntfy openssh-server pleroma privatebin searx tt-rss thelounge znc)
+    jetforce mariadb-server matrix mobilizon nginx ntfy openssh-server pleroma privatebin searxng tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -247,7 +247,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "ntfy": {
         "desc":        "a simple HTTP-based pub-sub notification service",
-        "version":     "-",
+        "version":     "dpkg -s ntfy | awk '/Version:/ {print $2}'",
         "url":         "https://ntfy.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
@@ -263,7 +263,7 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://pb.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
-      "searx": {
+      "searxng": {
         "desc":        "privacy-respecting metasearch engine",
         "version":     "$(curl -fs https://searx."$DOMAIN"/config | jq -Mr .version)",
         "url":         "https://searx.$DOMAIN/",
