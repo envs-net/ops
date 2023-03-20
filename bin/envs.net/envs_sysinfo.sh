@@ -459,7 +459,7 @@ include 'header.php';
   <tr><td><strong>srv01.envs.net</strong></td> <td></td></tr>
   <tr><td>location:</td> <td>Hetzner (Falkenstein)</td></tr>
   <tr><td>os:</td> <td>Debian GNU/Linux 11 (bullseye)</td></tr>
-  <tr><td>disk space:</td> <td>2x1TB ssd-nvme | 2x8TB hdd (media storage)</td></tr>
+  <tr><td>disk space:</td> <td>2x3.84TB ssd-nvme | 2x12TB hdd (media storage)</td></tr>
   <tr><td>services:</td> <td>$(print_srv_services 'srv01' "${sorted_services[@]}")</td></tr>
 </table>
 <p></p>
