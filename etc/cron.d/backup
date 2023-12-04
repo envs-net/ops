@@ -4,5 +4,4 @@
 SHELL=/bin/sh
 PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:/root
 
-#13 1,13 * * * root /root/backup-server.sh
 13 1 * * * root /root/backup-server.sh
