@@ -192,7 +192,7 @@ cat<<EOM > "$TMP_JSON"
         "server":      "core.$DOMAIN"
       },
       "gitea": {
-        "desc":        "painless self-hosted git service written in go",
+        "desc":        "painless self-hosted git service",
         "version":     "$(curl -fs https://git."$DOMAIN"/api/v1/version | jq -Mr .version)",
         "url":         "https://git.$DOMAIN/",
         "server":      "core.$DOMAIN"
