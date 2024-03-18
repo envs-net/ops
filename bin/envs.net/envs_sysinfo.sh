@@ -11,7 +11,7 @@ DOMAIN='envs.net'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cinny cryptpad drone element-web getwtxt gitea gophernicus ffsync hedgedoc hydrogen-web ipinfo
+services=(0x0 bbj cinny cryptpad drone element-web getwtxt gitea gophernicus hedgedoc hydrogen-web ipinfo
     jetforce mariadb-server matrix mobilizon nginx ntfy openssh-server pleroma privatebin searxng tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -201,12 +201,6 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "modern full-featured (and hopefully) secure gopher daemon",
         "version":     "$(/usr/local/sbin/gophernicus -v | sed 's/Gophernicus\///' | awk '{print $1}')",
         "url":         "gopher://$DOMAIN/",
-        "server":      "core.$DOMAIN"
-      },
-      "ffsync": {
-        "desc":        "firefox sync server",
-        "version":     "$(lxc-attach -n 0x0 -- bash -c "awk '/^Version:/ {print \$2}' /srv/ffsync/syncserver.egg-info/PKG-INFO")",
-        "url":         "https://ffsync.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "hedgedoc": {
