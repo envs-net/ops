@@ -3,8 +3,10 @@
 # envs.net - generate sysinfo.json and sysinfo.php
 # - this script is called by /etc/cron.d/envs_sysinfo
 #
-WWW_PATH='/var/www/envs.net'
 DOMAIN='envs.net'
+WWW_PATH='/var/www/envs.net'
+JSON_FILE="$WWW_PATH/sysinfo.json"
+TMP_JSON='/tmp/sysinfo.json_tmp'
 
 [ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
 
@@ -43,8 +45,7 @@ misc=(aria2 bc busybox burrow byobu clinte dict gfu goaccess hugo jekyll mariadb
     pandoc pelican sagemath screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 
-#
-# do not add services!
+# do not add services here!
 service_pkgs=(mariadb-server nginx openssh-server)
 FULL_PKG_LIST=("${service_pkgs[@]}" "${shells[@]}" "${editors[@]}" "${inet_clients[@]}" "${coding_pkg[@]}" "${coding_tools[@]}" "${misc[@]}")
 
@@ -59,7 +60,7 @@ get_pkg_desc() {
 custom_pkg_desc() {
   local pkg="$1"
   case "$pkg" in
-    # packages
+    # system packages (overwrite_pkgs)
     crystal)     pkg_desc='Compiler for the Crystal language';;
     # custom packages
     av98)        pkg_desc='Command line gemini client. High speed, low drag';;
@@ -88,20 +89,19 @@ custom_pkg_desc() {
 #
 # SYSINFO.JSON
 #
-JSON_FILE="$WWW_PATH/sysinfo.json"
-TMP_JSON='/tmp/sysinfo.json_tmp'
-
 print_pkg_version() {
   local pkg_version
+  overwrite_pkgs=('crystal')
+
   #for pkg in $(dpkg-query -f '${binary:Package}\n' -W); do
   for pkg in "${FULL_PKG_LIST[@]}"; do
     _no_custom_pkg='0' ; custom_pkg_desc "$pkg"
-
-    if [ "$_no_custom_pkg" -eq '1' ] || [ "$pkg" = 'crystal' ]; then
-      pkg_version="$(dpkg-query -f '${Version}\n' -W "$pkg")"
-
-      printf '      "%s": "%s",\n' "$pkg" "$pkg_version"
-    fi
+    for o_pkg in "${overwrite_pkgs[@]}"; do
+      if [ "$_no_custom_pkg" -eq '1' ] || [ "$pkg" = "$o_pkg" ]; then
+        pkg_version="$(dpkg-query -f '${Version}\n' -W "$pkg")"
+        printf '      "%s": "%s",\n' "$pkg" "$pkg_version"
+      fi
+    done
   done
 }
 

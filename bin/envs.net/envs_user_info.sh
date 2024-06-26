@@ -3,7 +3,6 @@
 # envs.net - this script generates the following static sites
 #   - users_info.json
 #   - user_updates.php
-#   - gemini's index.gmi
 #
 # this script is called by /etc/cron.d/envs_user_info
 #
@@ -78,7 +77,8 @@ cat << EOM > "$TMP_JSON"
       "gemini":       "gemini://$DOMAIN/",
       "email":        "hostmaster@$DOMAIN",
       "admin_email":  "sudoers@$DOMAIN",
-      "user_count":   $(find /home -mindepth 1 -maxdepth 1 | wc -l)
+      "user_count":   $(find /home -mindepth 1 -maxdepth 1 | wc -l),
+      "want_users":   true
     },
     "users": {
 EOM
@@ -138,6 +138,10 @@ EOM
         if [ -f "$USER_HOME"/public_gemini/index.gmi ]; then
           cat << EOM >> "$TMP_JSON"
         "gemini":      "gemini://$DOMAIN/~$USERNAME/",
+EOM
+        else
+          cat << EOM >> "$TMP_JSON"
+        "gemini":      "",
 EOM
         fi
 # blog
@@ -280,13 +284,6 @@ echo "$LIST" | perl /usr/local/bin/envs.net/envs_user_info_genpage.pl > /tmp/use
 
 mv /tmp/user_updates.php_tmp "$WWW_PATH"/user_updates.php
 chown www-data:www-data "$WWW_PATH"/user_updates.php
-
-
-#
-# gemini's index.gmi
-#
-
-/usr/local/bin/envs.net/envs_gemini_genpage.sh
 
 
 #
