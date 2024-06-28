@@ -14,7 +14,7 @@ TMP_JSON='/tmp/sysinfo.json_tmp'
 
 # define packages by category for sysinfo.php Page
 services=(0x0 bbj cinny cryptpad drone element-web getwtxt gitea gophernicus hedgedoc hydrogen-web ipinfo
-    jetforce mariadb-server matrix mobilizon nginx ntfy openssh-server pleroma privatebin searxng tt-rss thelounge znc)
+    jetforce mariadb-server matrix nginx ntfy openssh-server pleroma privatebin searxng tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -231,12 +231,6 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "open network for secure, decentralized communication",
         "version":     "$(curl -fs https://matrix."$DOMAIN"/_matrix/federation/v1/version | jq -Mr .server.version)",
         "url":         "https://matrix.$DOMAIN/",
-        "server":      "srv01.$DOMAIN"
-      },
-      "mobilizon": {
-        "desc":        "manage your events - gather, organize and mobilize",
-        "version":     "$(curl -fs https://mobilizon."$DOMAIN"/.well-known/nodeinfo/2.1 | jq -Mr .software.version)",
-        "url":         "https://events.$DOMAIN/",
         "server":      "srv01.$DOMAIN"
       },
       "ntfy": {
