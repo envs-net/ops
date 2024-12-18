@@ -12,25 +12,26 @@ print "<?php
 	\$title = \"envs.net | recent user updates\";
 	\$desc = \"envs.net | recent user updates\";
 
-include 'header.php';
+include 'neoenvs_header.php';
 ?>
 
-	<body id=\"body\" class=\"dark-mode\">
-		<div>
+<body id=\"body\">
 
-			<div class=\"button_back\">
-				<pre class=\"clean\"><strong><a href=\"/\">&lt; back</a></strong></pre>
-			</div>
+<!-- Back button -->
+<nav class=\"sidenav\">
+	<a href=\"/\">
+		<img src=\"https://envs.net/img/envs_logo_200x200.png\" class=\"site-icon\" title=\"Back to the envs.net homepage\">
+	</a>
+</nav>
 
-			<div id=\"main\">
-<div class=\"block\">
-<h1><em>recent user updates</em></h1>
-<p></p>
-</div>
+<!-- main panel -->
+<main>
 
-<pre>this is a static list of the pages modified in <code>/home/*/public_html/*</code>. it updates every hour.</pre>
-<br />
-<ul>\n";
+	<h1>recent user updates</h1>
+
+	<p>this is a static list of the pages modified in <code>/home/*/public_html/*</code>. it updates every hour.</p>
+	
+	<ul>\n";
 
 while (<>) {
 		chomp;
@@ -44,6 +45,7 @@ while (<>) {
 };
 
 print "</ul>
-			</div>
 
-<?php include 'footer.php'; ?>";
+</main>
+
+<?php include 'neoenvs_footer.php'; ?>";
