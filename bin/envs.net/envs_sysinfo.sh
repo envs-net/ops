@@ -358,7 +358,7 @@ print_category() {
     printf '<details><summary class="menu" id="%s"><strong>&#35; %s</strong></summary>\n' "$category" "${category//_/ }"
   fi
 
-  printf '\t<table class="table_pkg">\n'
+  printf '\t<table class="table-pkg">\n'
   printf '\t\t<tr> <th class="tw140">Package</th> <th class="tw280">Version</th> <th>Description</th> </tr>\n'
 
   if [ "$category" = 'services' ]; then
@@ -410,57 +410,55 @@ cat<<EOM > /tmp/sysinfo.php_tmp
   \$local_hostname = shell_exec("hostname");
   \$local_os = shell_exec("lsb_release -ds");
 
-include 'header.php';
+include 'neoenvs_header.php';
 ?>
 
-  <body id="body" class="dark-mode">
-  <div>
+<body id="body">
 
-    <div class="button_back">
-    <pre class="clean"><strong><a href="/">&lt; back</a></strong></pre>
-    </div>
+<!-- Back button -->
+<nav class="sidenav">
+	<a href="/">
+		<img src="https://envs.net/img/envs_logo_200x200.png" class="site-icon" title="Back to the envs.net homepage">
+	</a>
+</nav>
 
-    <div id="main">
+<!-- main panel -->
+<main>
 
-<div class="block">
-<h1><em>sysinfo</em></h1>
-<pre>
-<em>full data source: <a href="/sysinfo.json">https://$DOMAIN/sysinfo.json</a></em>
-<em>status page: <a href="https://status.envs.net/" target="_blank">https://status.envs.net/</a></em>
+	<div class="block">
+		<h1>sysinfo</h1>
 
-<em>server admin: <a href="/~creme/">&#126;creme</a></em>
-</pre>
-<p></p>
-</div>
+		<p><em>full data source: <a href="/sysinfo.json">https://$DOMAIN/sysinfo.json</a></em><br>
+		<em>status page: <a href="https://status.envs.net/" target="_blank">https://status.envs.net/</a></em></p>
 
-<div class="block">
-<pre><strong><i class="fa fa-gear fa-fw" aria-hidden="true"></i> SYSTEM INFO</strong></pre>
-<table>
-  <tr><th class="tw110"></th> <th></th></tr>
-  <tr><td>time:</td> <td><?=\$datetime?></td></tr>
-  <tr><td>&nbsp;</td> <td></td></tr>
-  <tr><td><strong><?=\$local_hostname?></strong></td> <td></td></tr>
-  <tr><td>location:</td> <td>myloc (Düsseldorf)</td></tr>
-  <tr><td>os:</td> <td><?=\$local_os?></td></tr>
-  <tr><td>disk space:</td> <td>2x1TB ssd</td></tr>
-  <tr><td>services:</td> <td>$(print_srv_services 'core' "${sorted_services[@]}")</td></tr>
-  <tr><td><hr></td> <td><hr></td></tr>
-  <tr><td><strong>srv01.envs.net</strong></td> <td></td></tr>
-  <tr><td>location:</td> <td>Hetzner (Falkenstein)</td></tr>
-  <tr><td>os:</td> <td>Debian GNU/Linux 12 (bookworm)</td></tr>
-  <tr><td>disk space:</td> <td>2x3.84TB ssd-nvme | 2x12TB hdd (media storage)</td></tr>
-  <tr><td>services:</td> <td>$(print_srv_services 'srv01' "${sorted_services[@]}")</td></tr>
-</table>
-<p></p>
-</div>
+		<p><em>server admin: <a href="/~creme/">&#126;creme</a></em></p>
+	</div>
 
-<pre>
-this is a static list of the package informations. it updates once per day.
+	<div class="block">
+		<p><strong><i class="fa fa-gear fa-fw" aria-hidden="true"></i> SYSTEM INFO</strong></p>
+		<table>
+		  <tr><th class="tw110"></th> <th></th></tr>
+		  <tr><td>time:</td> <td><?=\$datetime?></td></tr>
+		  <tr><td>&nbsp;</td> <td></td></tr>
+		  <tr><td><strong><?=\$local_hostname?></strong></td> <td></td></tr>
+		  <tr><td>location:</td> <td>myloc (Düsseldorf)</td></tr>
+		  <tr><td>os:</td> <td><?=\$local_os?></td></tr>
+		  <tr><td>disk space:</td> <td>2x1TB ssd</td></tr>
+		  <tr><td>services:</td> <td>$(print_srv_services 'core' "${sorted_services[@]}")</td></tr>
+		  <tr><td><hr></td> <td><hr></td></tr>
+		  <tr><td><strong>srv01.envs.net</strong></td> <td></td></tr>
+		  <tr><td>location:</td> <td>Hetzner (Falkenstein)</td></tr>
+		  <tr><td>os:</td> <td>Debian GNU/Linux 12 (bookworm)</td></tr>
+		  <tr><td>disk space:</td> <td>2x3.84TB ssd-nvme | 2x12TB hdd (media storage)</td></tr>
+		  <tr><td>services:</td> <td>$(print_srv_services 'srv01' "${sorted_services[@]}")</td></tr>
+		</table>
+	</div>
 
-<strong>&#35; can i get [package] installed?</strong>
-probably! send an email with your suggestion to <a href="mailto:sudoers@$DOMAIN">sudoers@$DOMAIN</a>.
+	<p>this is a static list of the package informations. it updates once per day.</p>
 
-</pre>
+	<p><strong>&#35; can i get [package] installed?</strong><br>
+	probably! send an email with your suggestion to <a href="mailto:sudoers@$DOMAIN">sudoers@$DOMAIN</a>.</p>
+
 
 $(print_category 'services' "${sorted_services[@]}")
 $(print_category 'shells' "${sorted_shells[@]}")
@@ -469,9 +467,10 @@ $(print_category 'online_browser_and_clients' "${sorted_inet_clients[@]}")
 $(print_category 'coding_packages' "${sorted_coding_pkg[@]}")
 $(print_category 'coding_tools' "${sorted_coding_tools[@]}")
 $(print_category 'misc' "${sorted_misc[@]}")
-    </div>
 
-<?php include 'footer.php'; ?>
+</main>
+
+<?php include 'neoenvs_footer.php'; ?>
 
 EOM
 
