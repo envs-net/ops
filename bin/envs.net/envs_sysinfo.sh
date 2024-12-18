@@ -26,7 +26,7 @@ editors=(ed emacs micro nano neovim vim)
 readarray -t sorted_editors < <(printf '%s\n' "${editors[@]}" | sort)
 
 
-inet_clients=(alpine av98 bombadillo curl gomuks irssi lynx neomutt meli mutt mosh openssh-client pb toot weechat wget vf1)
+inet_clients=(alpine av98 bombadillo curl gomuks irssi lynx neomutt meli mutt mosh openssh-client toot w3m weechat wget vf1)
 readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 
@@ -42,7 +42,7 @@ readarray -t sorted_coding_tools < <(printf '%s\n' "${coding_tools[@]}" | sort)
 
 
 misc=(aria2 bc busybox burrow byobu clinte dict gfu goaccess hugo jekyll mariadb-client mandoc mathomatic mathtex mkdocs
-    pandoc pelican sagemath screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
+    pandoc pb pelican sagemath screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 
 # do not add services here!
@@ -421,6 +421,7 @@ include 'header.php';
     </div>
 
     <div id="main">
+
 <div class="block">
 <h1><em>sysinfo</em></h1>
 <pre>
