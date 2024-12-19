@@ -359,7 +359,7 @@ print_category() {
   fi
 
   printf '\t<table class="table-pkg">\n'
-  printf '\t\t<tr> <th class="tw140">Package</th> <th class="tw280">Version</th> <th>Description</th> </tr>\n'
+  printf '\t\t<tr> <th class="tw16">Package</th> <th class="tw36">Version</th> <th class="tw85">Description</th> </tr>\n'
 
   if [ "$category" = 'services' ]; then
     for pkg in "${arr[@]}"; do
@@ -437,7 +437,7 @@ include 'neoenvs_header.php';
 	<div class="block">
 		<p><strong><i class="fa fa-gear fa-fw" aria-hidden="true"></i> SYSTEM INFO</strong></p>
 		<table>
-		  <tr><th class="tw110"></th> <th></th></tr>
+		  <tr><th class="tw13_75"></th> <th></th></tr>
 		  <tr><td>time:</td> <td><?=\$datetime?></td></tr>
 		  <tr><td>&nbsp;</td> <td></td></tr>
 		  <tr><td><strong><?=\$local_hostname?></strong></td> <td></td></tr>
