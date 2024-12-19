@@ -27,10 +27,12 @@ include 'neoenvs_header.php';
 <!-- main panel -->
 <main>
 
-	<h1>recent user updates</h1>
+	<div class=\"block\">
+		<h1>recent user updates</h1>
+	</div
 
 	<p>this is a static list of the pages modified in <code>/home/*/public_html/*</code>. it updates every hour.</p>
-	
+
 	<ul>\n";
 
 while (<>) {
