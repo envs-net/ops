@@ -1,3 +1,0 @@
-#!/bin/sh
-
-python3 /opt/services/AV-98/av98.py "$@"

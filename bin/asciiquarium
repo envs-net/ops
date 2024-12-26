@@ -1,32 +1,26 @@
 #!/usr/bin/env perl
 #
 #############################################################################
-# Asciiquarium - An aquarium animation in ASCII art
 #
-# This program displays an aquarium/sea animation using ASCII art.
-# It requires the module Term::Animation, which requires Curses. You
-# can get both modules from http://search.cpan.org. Asciiquarium will
-# only run on platforms with a curses library, so Windows is not supported.
+# Asciiquarium - An aquarium/sea animation in ASCII art
 #
-# The original version of this program is available at:
-#
-# http://robobunny.com/projects/asciiquarium
+# Enjoy the mysteries of the sea from the safety of your own terminal!
 #
 #############################################################################
-# Author:
+# Original Author:
 #   Kirk Baucom <kbaucom@schizoid.com>
 #
 # Contributors:
-#   Joan Stark: http://www.geocities.com/SoHo/7373/
+#   Joan Stark: https://web.archive.org/web/20140722110449/http://www.geocities.com/SoHo/7373/
 #     most of the ASCII art
 #
 #   Claudio Matsuoka <cmatsuoka@gmail.com>
 #     improved marine biodiversity (backported from the Asciiquarium Live
-#     Wallaper for Android)
+#     Wallpaper for Android)
 #     https://market.android.com/details?id=org.helllabs.android.asciiquarium
 #
 #   driechers: https://github.com/driechers
-#     contributed the yellow submarine and re-introductoin of elements by
+#     contributed the yellow submarine and re-introduction of elements by
 #     Kirk Baucom that apparently were lost
 #     (https://github.com/cmatsuoka/asciiquarium/pull/6,
 #     https://github.com/cmatsuoka/asciiquarium/pull/5)
@@ -49,6 +43,19 @@
 #     background color and transparency patch
 #     (https://github.com/rwxrob/dot/blob/2c4b63f77dcb235be4e218cd8febc5533420ee54/scripts/fishies#L110)
 #
+#   kronos-chenchang: https://github.com/kronos-chenchang
+#     castle door can now open, swordfish fix
+#     (https://github.com/kronos-chenchang/asciiquarium)
+#
+#   Phani Rithvij: https://gist.github.com/phanirithvij
+#     screensaver mode
+#     (https://gist.github.com/nothub/91ff81bd945eb8f1e6af08492a13ff75?permalink_comment_id=4476043#gistcomment-4476043)
+#
+#   Steven Ward: https://github.com/planet36
+#     various bug fixes and consistency patches
+#     (https://github.com/nothub/asciiquarium/pulls?q=author:planet36)
+#
+#############################################################################
 # License:
 #
 # Copyright (C) 2013 Kirk Baucom (kbaucom@schizoid.com)
@@ -76,22 +83,48 @@ use Getopt::Long qw(GetOptions);
 use strict;
 use warnings;
 
-my $version = "1.2";
+my $version = "1.3";
+my $help_message = 'Asciiquarium is an aquarium/sea animation in ASCII art.
+Enjoy the mysteries of the sea from the safety of your own terminal!
+
+Options:
+  -c --classic      Only show species from Asciiquarium 1.0
+  -t --transparent  Transparent background
+  -s --screensaver  Exit on any keypress
+  -h --help         Print help and exit
+  -v --version      Print version and exit
+
+Hotkeys:
+  q  quit
+  r  redraw
+  p  pause
+';
+
 my $new_fish = 1;
 my $new_monster = 1;
 
 my $classic = 0;
 my $transparent = 0;
+my $screensaver = 0;
+my $print_help = 0;
 my $print_version = 0;
 
 GetOptions(
     'classic'     => \$classic,
     'transparent' => \$transparent,
+    'screensaver' => \$screensaver,
+    'help'        => \$print_help,
     'version'     => \$print_version,
-) or die "Try: $0 --classic --transparent\n";
+) or die "$help_message";
+
+if ($print_help) {
+    print $help_message;
+    exit;
+}
 
 if ($print_version) {
-    VERSION_MESSAGE();
+    print "Asciiquarium $version\n";
+    exit;
 }
 
 if ($classic) {
@@ -164,9 +197,10 @@ sub main {
         while (1) {
             my $in = lc(getch());
 
-            if ($in eq 'q') {quit();}  # Exit
-            elsif ($in eq 'r') {last;} # Redraw (will recreate all objects)
+            if    ($in eq 'q') {quit();}  # Exit
+            elsif ($in eq 'r' || $in eq KEY_RESIZE()) {last;}  # Redraw (will recreate all objects)
             elsif ($in eq 'p') {$paused = !$paused;}
+            elsif ($screensaver && $in ne '-1') {quit();}      # Exit for any key (screensaver mode)
 
             $anim->animate() unless ($paused);
         }
@@ -209,7 +243,8 @@ sub add_environment {
 
 sub add_castle {
     my ($anim) = @_;
-    my $castle_image = q{
+    my @castle_image = (
+q{
                T~~
                |
               /^\
@@ -223,15 +258,87 @@ sub add_castle {
  |=  []- |-  /| |\   |=_ =[] |
  |- =_   | =| | | |  |- = -  |
  |_______|__|_|_|_|__|_______|
-};
+},q{
+               T~~
+               |
+              /^\
+             /   \
+ _   _   _  /     \  _   _   _
+[ ]_[ ]_[ ]/ _   _ \[ ]_[ ]_[ ]
+|_=__-_ =_|_[ ]_[ ]_|_=-___-__|
+ | _- =  | =_ = _    |= _=   |
+ |= -[]  |- = _ =    |_-=_[] |
+ | =_    |= - ___    | =_ =  |
+ |=  []- |-  /| |\   |=_ =[] |
+ |- =_   | =|_|_|_|  |- = -  |
+ |_______|__|     |__|_______|
+},q{
+               T~~
+               |
+              /^\
+             /   \
+ _   _   _  /     \  _   _   _
+[ ]_[ ]_[ ]/ _   _ \[ ]_[ ]_[ ]
+|_=__-_ =_|_[ ]_[ ]_|_=-___-__|
+ | _- =  | =_ = _    |= _=   |
+ |= -[]  |- = _ =    |_-=_[] |
+ | =_    |= - ___    | =_ =  |
+ |=  []- |-  /|_|\   |=_ =[] |
+ |- =_   | =|     |  |- = -  |
+ |_______|__|     |__|_______|
+},q{
+               T~~
+               |
+              /^\
+             /   \
+ _   _   _  /     \  _   _   _
+[ ]_[ ]_[ ]/ _   _ \[ ]_[ ]_[ ]
+|_=__-_ =_|_[ ]_[ ]_|_=-___-__|
+ | _- =  | =_ = _    |= _=   |
+ |= -[]  |- = _ =    |_-=_[] |
+ | =_    |= - ___    | =_ =  |
+ |=  []- |-  /   \   |=_ =[] |
+ |- =_   | =|     |  |- = -  |
+ |_______|__|     |__|_______|
+},q{
+               T~~
+               |
+              /^\
+             /   \
+ _   _   _  /     \  _   _   _
+[ ]_[ ]_[ ]/ _   _ \[ ]_[ ]_[ ]
+|_=__-_ =_|_[ ]_[ ]_|_=-___-__|
+ | _- =  | =_ = _    |= _=   |
+ |= -[]  |- = _ =    |_-=_[] |
+ | =_    |= - ___    | =_ =  |
+ |=  []- |-  /|_|\   |=_ =[] |
+ |- =_   | =|     |  |- = -  |
+ |_______|__|     |__|_______|
+},q{
+               T~~
+               |
+              /^\
+             /   \
+ _   _   _  /     \  _   _   _
+[ ]_[ ]_[ ]/ _   _ \[ ]_[ ]_[ ]
+|_=__-_ =_|_[ ]_[ ]_|_=-___-__|
+ | _- =  | =_ = _    |= _=   |
+ |= -[]  |- = _ =    |_-=_[] |
+ | =_    |= - ___    | =_ =  |
+ |=  []- |-  /| |\   |=_ =[] |
+ |- =_   | =|_|_|_|  |- = -  |
+ |_______|__|     |__|_______|
+}
+	);
 
-    my $castle_mask = q{
-                RR
+    my @castle_mask = (
+    q{
+                GG
 
-              yyy
-             y   y
-            y     y
-           y       y
+              rrr
+             r   r
+            r     r
+           r       r
 
 
 
@@ -239,14 +346,86 @@ sub add_castle {
              yy yy
             y y y y
             yyyyyyy
-};
+},q{
+                GG
+
+              rrr
+             r   r
+            r     r
+           r       r
+
+
+
+              yyy
+             yy yy
+            yyyyyyy
+            y     y
+},q{
+                GG
+
+              rrr
+             r   r
+            r     r
+           r       r
+
+
+
+              yyy
+             yyyyy
+            y     y
+            y     y
+},q{
+                GG
+
+              rrr
+             r   r
+            r     r
+           r       r
+
+
+
+              yyy
+             y   y
+            y     y
+            y     y
+},q{
+                GG
+
+              rrr
+             r   r
+            r     r
+           r       r
+
+
+
+              yyy
+             yyyyy
+            y     y
+            y     y
+},q{
+                GG
+
+              rrr
+             r   r
+            r     r
+           r       r
+
+
+
+              yyy
+             yy yy
+            yyyyyyy
+            y     y
+});
 
     $anim->new_entity(
         name          => "castle",
-        shape         => $castle_image,
-        color         => $castle_mask,
+        shape         => \@castle_image,
+        auto_trans    => 1,
+        color         => \@castle_mask,
         position      => [ $anim->width() - 32, $anim->height() - 13, $depth{'castle'} ],
-        default_color => 'WHITE',
+        callback_args => [ 0, 0, 0, 0.1],
+        default_color => 'white',
     );
 }
 
@@ -386,9 +565,9 @@ sub add_new_fish {
         q{
      ,
      \}\\
-\\  .'  `\\
+\\??.'  `\\
 \}\}<   ( 6>
-/  `,  .'
+/??`,  .'
      \}/
      '
 },
@@ -404,9 +583,9 @@ sub add_new_fish {
         q{
     ,
    /\{
- /'  `.  /
+ /'  `.??/
 <6 )   >\{\{
- `.  ,'  \\
+ `.  ,'??\\
    \\\{
     `
 },
@@ -463,7 +642,7 @@ _/ (o)        '.??.' /
 },
         q{
        ,--,_
-__    _\\.---'-.
+__????_\\.---'-.
 \\ '.-"     // o\\
 /_.'-._    \\\\  /
        `"--(/"`
@@ -477,7 +656,7 @@ __    _\\.---'-.
 },
         q{
     _,--,
- .-'---./_    __
+ .-'---./_????__
 /o \\\\     "-.' /
 \\  //    _.-'._\\
  `"\\)--"`
@@ -501,9 +680,9 @@ sub add_old_fish {
         q{
        \
      ...\..,
-\  /'       \
+\??/'       \
  >=     (  ' >
-/  \      / /
+/??\      / /
     `"'"'/''
 },
         q{
@@ -517,9 +696,9 @@ sub add_old_fish {
         q{
       /
   ,../...
- /       '\  /
+ /       '\??/
 < '  )     =<
- \ \      /  \
+ \ \      /??\
   `'\'"'"'
 },
         q{
@@ -532,9 +711,9 @@ sub add_old_fish {
 },
         q{
     \
-\ /--\
+\?/--\
 >=  (o>
-/ \__/
+/?\__/
     /
 },
         q{
@@ -546,9 +725,9 @@ sub add_old_fish {
 },
         q{
   /
- /--\ /
+ /--\?/
 <o)  =<
- \__/ \
+ \__/?\
   \
 },
         q{
@@ -560,10 +739,10 @@ sub add_old_fish {
 },
         q{
        \:.
-\;,   ,;\\\\\,,
+\;,???,;\\\\\,,
   \\\\\;;:::::::o
   ///;;::::::::<
- /;` ``/////``
+ /;`?``/////``
 },
         q{
        222
@@ -574,10 +753,10 @@ sub add_old_fish {
 },
         q{
       .:/
-   ,,///;,   ,;/
+   ,,///;,???,;/
  o:::::::;;///
 >::::::::;;\\\\\
-  ''\\\\\\\\\'' ';\
+  ''\\\\\\\\\''?';\
 },
         q{
       222
@@ -905,7 +1084,6 @@ sub add_shark {
         shape         => $shark_image[$dir],
         auto_trans    => 1,
         position      => [ $x, $y, $depth{'shark'} ],
-        default_color => 'WHITE',
         callback_args => [ $speed, 0, 0 ],
         die_offscreen => 1,
         death_cb      => sub {group_death(@_, 'teeth')},
@@ -972,7 +1150,7 @@ sub add_fishhook {
        o
       ||
       ||
-/ \   ||
+/ \???||
   \__//
   `--'
 };
@@ -982,7 +1160,7 @@ sub add_fishhook {
 .
 
 \
-
+?
 };
     my $line_image = "|\n" x 50 . " \n" x 6;
 
@@ -1003,7 +1181,6 @@ sub add_fishhook {
     $anim->new_entity(
         type          => 'fishhook',
         shape         => $hook_image,
-        trans_char    => ' ',
         position      => [ $x, $y, $depth{'water_line1'} ],
         auto_trans    => 1,
         die_offscreen => 1,
@@ -1501,7 +1678,7 @@ sub add_big_fish_2 {
   ;.="` / ';\\        _.     _.-`
   /_.='/ \\/ /;._ _ _\{.-;`/"`
 /._=_.'???'/ / / / /\{.= /
-/.=' ??????`'./_/_.=`\{_/
+/.='???????`'./_/_.=`\{_/
 }, q{
             _ _ _
         ,="`/ / /'=.
@@ -1526,7 +1703,7 @@ sub add_big_fish_2 {
 11111     1 1 1 11111111111
 1111111  11 111112 2 2 2 2 111
   111111111112 2 2 2 2 2 2 22 1
-  111 1111 12 22 22 11111    W 1
+  111 1111112 22 22 11111    W 1
    11111112 2 2  2 2 111111     1
    111111111          11111   111
   11111 11111        11     1111
@@ -1863,7 +2040,7 @@ sub add_submarine {
                        __
                       _|_
                      /   |
- _ ? _______________/____|_______________
+ _???_______________/____|_______________
 ( )?/                                   /
  (=<                      O   O   O    /
 (_)?\_________________________________/
@@ -1875,7 +2052,7 @@ sub add_submarine {
                        |
                       _|_
                      /   |
- _ ? _______________/____|_______________
+ _???_______________/____|_______________
 ( )?/                                   /
  (=<                      O   O   O    /
 (_)?\_________________________________/
@@ -1887,7 +2064,7 @@ sub add_submarine {
                        |
                       _|_
                      /   |
- _ ? _______________/____|_______________
+ _???_______________/____|_______________
 ( )?/                                   /
  (=<                      O   O   O    /
 (_)?\_________________________________/
@@ -1899,7 +2076,7 @@ sub add_submarine {
                        |
                       _|_
                      /   |
- _ ? _______________/____|_______________
+ _???_______________/____|_______________
 ( )?/                                   /
  (=<                      O   O   O    /
 (_)?\_________________________________/
@@ -1911,7 +2088,7 @@ sub add_submarine {
                        |
                       _|_
                      /   |
- _ ? _______________/____|_______________
+ _???_______________/____|_______________
 ( )?/                                   /
  (=<                      O   O   O    /
 (_)?\_________________________________/
@@ -1923,7 +2100,7 @@ sub add_submarine {
                        |
                       _|_
                      /   |
- _ ? _______________/____|_______________
+ _???_______________/____|_______________
 ( )?/                                   /
  (=<                      O   O   O    /
 (_)?\_________________________________/
@@ -1935,7 +2112,7 @@ sub add_submarine {
                        |
                       _|_
                      /   |
- _ ? _______________/____|_______________
+ _???_______________/____|_______________
 ( )?/                                   /
  (=<                      O   O   O    /
 (_)?\_________________________________/
@@ -1947,7 +2124,7 @@ sub add_submarine {
                        |
                       _|_
                      /   |
- _ ? _______________/____|_______________
+ _???_______________/____|_______________
 ( )?/                                   /
  (=<                      O   O   O    /
 (_)?\_________________________________/
@@ -1959,7 +2136,7 @@ sub add_submarine {
                        __
                       _|_
                      /   |
- _ ? _______________/____|_______________
+ _???_______________/____|_______________
 ( )?/                                   /
  (=<                      O   O   O    /
 (_)?\_________________________________/
@@ -1972,7 +2149,7 @@ sub add_submarine {
                __
                _|_
               |   \
-______________|____\_______________ ? _
+______________|____\_______________???_
 \                                  \?( )
  \    O   O   O                     >=)
   \________________________________/?(_)
@@ -1984,7 +2161,7 @@ ______________|____\_______________ ? _
                 |
                _|_
               |   \
-______________|____\_______________ ? _
+______________|____\_______________???_
 \                                  \?( )
  \    O   O   O                     >=)
   \________________________________/?(_)
@@ -1996,7 +2173,7 @@ ______________|____\_______________ ? _
                 |
                _|_
               |   \
-______________|____\_______________ ? _
+______________|____\_______________???_
 \                                  \?( )
  \    O   O   O                     >=)
   \________________________________/?(_)
@@ -2008,7 +2185,7 @@ ______________|____\_______________ ? _
                 |
                _|_
               |   \
-______________|____\_______________ ? _
+______________|____\_______________???_
 \                                  \?( )
  \    O   O   O                     >=)
   \________________________________/?(_)
@@ -2020,7 +2197,7 @@ ______________|____\_______________ ? _
                 |
                _|_
               |   \
-______________|____\_______________ ? _
+______________|____\_______________???_
 \                                  \?( )
  \    O   O   O                     >=)
   \________________________________/?(_)
@@ -2032,7 +2209,7 @@ ______________|____\_______________ ? _
                 |
                _|_
               |   \
-______________|____\_______________ ? _
+______________|____\_______________???_
 \                                  \?( )
  \    O   O   O                     >=)
   \________________________________/?(_)
@@ -2044,7 +2221,7 @@ ______________|____\_______________ ? _
                 |
                _|_
               |   \
-______________|____\_______________ ? _
+______________|____\_______________???_
 \                                  \?( )
  \    O   O   O                     >=)
   \________________________________/?(_)
@@ -2056,7 +2233,7 @@ ______________|____\_______________ ? _
                 |
                _|_
               |   \
-______________|____\_______________ ? _
+______________|____\_______________???_
 \                                  \?( )
  \    O   O   O                     >=)
   \________________________________/?(_)
@@ -2068,7 +2245,7 @@ ______________|____\_______________ ? _
                __
                _|_
               |   \
-______________|____\_______________ ? _
+______________|____\_______________???_
 \                                  \?( )
  \    O   O   O                     >=)
   \________________________________/?(_)
@@ -2128,28 +2305,28 @@ www
 sub add_sword_fish {
     my ($old_end, $anim) = @_;
 
-    my @sword_fish_image = (
-        q{
+  my @sword_fish_image = (
+q{
                              )",
-_                           /\\\\\\\\
- ",            _____,,,,,--\\\\\\\\\\\\)
-  \\\\        ,,;_______\\\\\\\\\\----""";_
+_???????????????????????????/\\\\\\\\
+ ",????????????_____,,,,,--\\\\\\\\\\\\)
+  \\\\????????,,;_______\\\\\\\\\\----""";_
    )\\_.-'`"""""......-------------,o";__________
    ==.-.,____           """;;;;,__._.=='""
-   )\\    "   "\\""---;...,______:.-"
-  //           ")_.-`      _.-'
-_.'                    _.-'
+   )/????"???"\\""---;...,______:.-"
+  //???????????")_.-`??????_.-'
+_.'????????????????????_.-'
 },
-        q{
+q{
                 ,"(
-               ////\                           _
-              (//////--,,,,,_____            ,"
-            _;"""----/////_______;,,        //
+               ////\???????????????????????????_
+              (//////--,,,,,_____????????????,"
+            _;"""----/////_______;,,????????//
 __________;"o,-------------......"""""`'-._/(
       ""'==._.__,;;;;"""           ____,.-.==
-             "-.:______,...;---""/"   "    \\(
-                 '-._      `-._("           \\\\
-                     '-._                    '._
+             "-.:______,...;---""/"???"????\\(
+                 '-._??????`-._("???????????\\\
+                     '-._?????????????????????'._
 });
 
     my @sword_fish_mask = (
@@ -2279,9 +2456,4 @@ sub rand_color {
         $color_mask =~ s/$i/$color/gm;
     }
     return $color_mask;
-}
-
-sub VERSION_MESSAGE {
-    print "asciiquarium $version\n";
-    exit;
 }
