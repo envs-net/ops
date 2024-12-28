@@ -32,7 +32,7 @@ readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre dmd-compiler elixir erlang flex
     g++ gcc gcl gdc gforth ghc go golang guile-2.2 inform julia lua5.1 lua5.2 lua5.3 mono-complete nasm nim nodejs
-    octave perl php picolisp ponyc python python2.7 python3 python3.8 python3.9 racket ruby rustc scala tcl yasm vlang ziglang)
+    octave perl php picolisp ponyc python python2.7 python3 python3.13 racket ruby rustc scala tcl yasm vlang ziglang)
 readarray -t sorted_coding_pkg < <(printf '%s\n' "${coding_pkg[@]}" | sort)
 
 
@@ -73,8 +73,7 @@ custom_pkg_desc() {
     linac)       pkg_desc='LINAC is not a compiler';;
     micro)       pkg_desc='a new modern terminal-based text editor';;
     pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
-    python3.8)   pkg_desc="$(get_pkg_desc python3)";;
-    python3.9)   pkg_desc="$(get_pkg_desc python3)";;
+    python3.13)  pkg_desc="$(get_pkg_desc python3)";;
     twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
     txtnish)     pkg_desc='A twtxt client with minimal dependencies';;
     vf1)         pkg_desc='Command line gopher client. High speed, low drag.';;
@@ -288,8 +287,7 @@ cat<<EOM > "$TMP_JSON"
       "linac":        "$(/usr/local/sbin/linac help | head -1 | awk '{print $2}')",
       "micro":        "$(/usr/local/bin/micro -version | awk '/Version/ {print $2}')",
       "pb":           "$(/usr/local/bin/pb -v)",
-      "python3.8":    "$(/usr/local/bin/python3.8 --version | awk '{print $2}')",
-      "python3.9":    "$(/usr/local/bin/python3.9 --version | awk '{print $2}')",
+      "python3.13":   "$(/usr/local/bin/python3.13 --version | awk '{print $2}')",
       "twtxt":        "$(/usr/local/bin/twtxt --version | awk '/version/ {printf $3}')",
       "txtnish":      "$(/usr/local/bin/txtnish -V)",
       "vf1":          "$(/usr/local/bin/vf1 --version | awk '/VF-1/ {print $2}')",
