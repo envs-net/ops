@@ -41,7 +41,7 @@ coding_tools=(ack bison build-essential cl-launch cvs devscripts ecl gawk git gr
 readarray -t sorted_coding_tools < <(printf '%s\n' "${coding_tools[@]}" | sort)
 
 
-misc=(aria2 bc busybox burrow byobu clinte dict gfu goaccess hugo jekyll mariadb-client mandoc mathomatic mathtex mkdocs
+misc=(aria2 bc busybox burrow byobu clinte dict gfu goaccess hugo jekyll linac mariadb-client mandoc mathomatic mathtex mkdocs
     pandoc pb pelican sagemath screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 
@@ -70,6 +70,7 @@ custom_pkg_desc() {
     gfu)         pkg_desc='A utility for formatting gophermaps';;
     go)          pkg_desc='tool for managing Go source code';;
     goaccess)    pkg_desc='fast web log analyzer and interactive viewer';;
+    linac)       pkg_desc='LINAC is not a compiler';;
     micro)       pkg_desc='a new modern terminal-based text editor';;
     pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
     python3.8)   pkg_desc="$(get_pkg_desc python3)";;
@@ -284,6 +285,7 @@ cat<<EOM > "$TMP_JSON"
       "gfu":          "$(/usr/local/bin/gfu -v | sed '/version/s/.*version \([^ ][^ ]*\)[ ]*.*/\1/')",
       "go":           "$(awk -Fgo '{print $2}' /usr/local/go/VERSION)",
       "goaccess":     "$(/usr/bin/goaccess -V | awk '/GoAccess/ {print $3}')",
+      "linac":        "$(/usr/local/sbin/linac help | head -1 | awk '{print $2}')",
       "micro":        "$(/usr/local/bin/micro -version | awk '/Version/ {print $2}')",
       "pb":           "$(/usr/local/bin/pb -v)",
       "python3.8":    "$(/usr/local/bin/python3.8 --version | awk '{print $2}')",
