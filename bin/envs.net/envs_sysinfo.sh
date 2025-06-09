@@ -306,7 +306,7 @@ cat<<EOM >> "$TMP_JSON"
 EOM
 
 mv "$TMP_JSON" "$JSON_FILE"
-chown www-data:www-data "$JSON_FILE"
+chown services:envs "$JSON_FILE"
 
 
 #
@@ -475,7 +475,7 @@ $(print_category 'misc' "${sorted_misc[@]}")
 EOM
 
 mv /tmp/sysinfo.php_tmp "$WWW_PATH"/sysinfo.php
-chown www-data:www-data "$WWW_PATH"/sysinfo.php
+chown services:envs "$WWW_PATH"/sysinfo.php
 
 #
 exit 0
