@@ -2,3 +2,7 @@
 
 printf 'users online: %s | total: %s\n' "$(users | tr ' ' \\n | uniq | wc -l)" "$(find /home -mindepth 1 -maxdepth 1 | wc -l)"
 printf 'allocated ttys: %s\n\n' "$(users | wc -w)"
+
+users | tr ' ' \\n | uniq | column
+
+printf '\n###\n'
