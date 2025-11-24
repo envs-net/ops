@@ -13,7 +13,7 @@ TMP_JSON='/tmp/sysinfo.json_tmp'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(0x0 bbj cinny cryptpad drone element-web getwtxt gitea gophernicus hedgedoc hydrogen-web ipinfo
+services=(bbj cinny cryptpad drone element-web getwtxt gitea gophernicus hedgedoc hydrogen-web ipinfo
     jetforce mariadb-server matrix nginx ntfy openssh-server pleroma privatebin searxng tt-rss thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -149,12 +149,6 @@ cat<<EOM > "$TMP_JSON"
       }
     },
     "services": {
-      "0x0": {
-        "desc":        "the null pointer - file hosting and url shortener",
-        "version":     "-",
-        "url":         "https://envs.sh/",
-        "server":      "core.$DOMAIN"
-      },
       "bbj": {
         "desc":        "bulletin butter & jelly: an http bulletin board server for small communities",
         "version":     "-",
