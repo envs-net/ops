@@ -78,7 +78,7 @@ cat << EOM > "$TMP_JSON"
       "email":        "hostmaster@$DOMAIN",
       "admin_email":  "sudoers@$DOMAIN",
       "user_count":   $(find /home -mindepth 1 -maxdepth 1 | wc -l),
-      "want_users":   true
+      "want_users":   false
     },
     "users": {
 EOM
