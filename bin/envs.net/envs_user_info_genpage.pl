@@ -43,7 +43,7 @@ while (<>) {
 		$file = $index;
 		$author =~ s%/home/(\w+)/public_html/(\S+)%$1%;
 		$file =~ s%/home/(\w+)/public_html/(\S+)%$2%;
-		print "<li><a href=\"https://envs.net/\~$author/\">\~$author</a> (<a href=\"https://envs.net/\~$author/$file\">$file</a>) at $date</li>\n";
+		print "<li><a href=\"https://$author.envs.net/\">\~$author</a> (<a href=\"https://$author.envs.net/$file\">$file</a>) at $date</li>\n";
 };
 
 print "</ul>

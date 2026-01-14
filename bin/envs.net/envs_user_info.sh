@@ -78,7 +78,7 @@ cat << EOM > "$TMP_JSON"
       "email":        "hostmaster@$DOMAIN",
       "admin_email":  "sudoers@$DOMAIN",
       "user_count":   $(find /home -mindepth 1 -maxdepth 1 | wc -l),
-      "want_users":   false
+      "want_users":   true
     },
     "users": {
 EOM
@@ -115,7 +115,7 @@ EOM
 # website
         if [ -f "$USER_HOME"/public_html/index.php ] || [ -f "$USER_HOME"/public_html/index.html ]; then
           cat << EOM >> "$TMP_JSON"
-        "website":     "https://$DOMAIN/~$USERNAME/",
+        "website":     "https://$USERNAME.$DOMAIN/",
 EOM
         else
           cat << EOM >> "$TMP_JSON"

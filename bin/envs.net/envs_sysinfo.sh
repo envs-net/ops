@@ -13,8 +13,8 @@ TMP_JSON='/tmp/sysinfo.json_tmp'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(bbj cinny cryptpad drone element-web getwtxt gitea gophernicus hedgedoc hydrogen-web ipinfo
-    jetforce mariadb-server matrix nginx ntfy openssh-server pleroma privatebin searxng tt-rss thelounge znc)
+services=(bbj cryptpad drone getwtxt gitea gophernicus hedgedoc ipinfo
+    jetforce mariadb-server nginx openssh-server pleroma privatebin searxng thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
@@ -130,7 +130,7 @@ cat<<EOM > "$TMP_JSON"
     },
     "system": {
       "core.$DOMAIN": {
-        "location":     "myloc (Düsseldorf)",
+        "location":     "Hetzner (Helsinki)",
         "os":           "$(/opt/sysinfo.sh get os)",
         "uptime":       "$(/opt/sysinfo.sh get uptime)",
         "uname":        "$(/opt/sysinfo.sh get uname)",
@@ -138,14 +138,14 @@ cat<<EOM > "$TMP_JSON"
         "cpuinfo":      "$(/opt/sysinfo.sh get cpuinfo)",
         "cpucount":     "$(/opt/sysinfo.sh get cpucount)"
       },
-      "srv01.$DOMAIN": {
+      "ext.$DOMAIN": {
         "location":     "Hetzner (Falkenstein)",
-        "os":           "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get os')",
-        "uptime":       "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get uptime')",
-        "uname":        "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get uname')",
-        "board":        "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get board')",
-        "cpuinfo":      "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get cpuinfo')",
-        "cpucount":     "$(ssh srv01.$DOMAIN '/opt/sysinfo.sh get cpucount')"
+        "os":           "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get os')",
+        "uptime":       "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get uptime')",
+        "uname":        "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get uname')",
+        "board":        "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get board')",
+        "cpuinfo":      "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get cpuinfo')",
+        "cpucount":     "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get cpucount')"
       }
     },
     "services": {
@@ -154,12 +154,6 @@ cat<<EOM > "$TMP_JSON"
         "version":     "-",
         "url":         "https://bbj.$DOMAIN/",
         "server":      "core.$DOMAIN"
-      },
-      "cinny": {
-        "desc":        "cinny is a matrix client focusing primarily on simple, elegant and secure interface.",
-        "version":     "-",
-        "url":         "https://cinny.$DOMAIN/",
-        "server":      "srv01.$DOMAIN"
       },
       "cryptpad": {
         "desc":        "collaborative real time editing",
@@ -172,12 +166,6 @@ cat<<EOM > "$TMP_JSON"
         "version":     "$(curl -fs https://drone."$DOMAIN"/version | jq -Mr .version)",
         "url":         "https://drone.$DOMAIN/",
         "server":      "core.$DOMAIN"
-      },
-      "element-web": {
-        "desc":        "universal secure chat app for matrix (web-client)",
-        "version":     "$(curl -fs https://element."$DOMAIN"/version)",
-        "url":         "https://element.$DOMAIN/",
-        "server":      "srv01.$DOMAIN"
       },
       "getwtxt": {
         "desc":        "twtxt registry service - microblogging for hackers",
@@ -203,12 +191,6 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://hedgedoc.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
-      "hydrogen-web": {
-        "desc":        "lightweight matrix client with legacy and mobile browser support",
-        "version":     "-",
-        "url":         "https://hydrogen.$DOMAIN/",
-        "server":      "srv01.$DOMAIN"
-      },
       "ipinfo": {
         "desc":        "ip address info",
         "version":     "-",
@@ -221,23 +203,11 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://gemini.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
-      "matrix": {
-        "desc":        "open network for secure, decentralized communication",
-        "version":     "$(curl -fs https://matrix."$DOMAIN"/_matrix/federation/v1/version | jq -Mr .server.version)",
-        "url":         "https://matrix.$DOMAIN/",
-        "server":      "srv01.$DOMAIN"
-      },
-      "ntfy": {
-        "desc":        "a simple HTTP-based pub-sub notification service",
-        "version":     "$(dpkg -s ntfy | awk '/Version:/ {print $2}')",
-        "url":         "https://ntfy.$DOMAIN/",
-        "server":      "core.$DOMAIN"
-      },
       "pleroma": {
         "desc":        "federated social network - microblogging",
         "version":     "$(curl -fs https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
         "url":         "https://pleroma.$DOMAIN/",
-        "server":      "srv01.$DOMAIN"
+        "server":      "core.$DOMAIN"
       },
       "privatebin": {
         "desc":        "graphical pastebin",
@@ -255,12 +225,6 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "self-hosted web irc client",
         "version":     "$(sudo -u thelounge /srv/thelounge/.yarn/bin/thelounge -v | awk -Fv '{print $2}')",
         "url":         "https://webirc.$DOMAIN/",
-        "server":      "core.$DOMAIN"
-      },
-      "tt-rss": {
-        "desc":        "tiny tiny rss - web-based news feed (rss/atom) aggregator",
-        "version":     "$(lxc-attach -n rss -- bash -c "dpkg -s tt-rss | awk '/Version:/ {print \$2}' | head -n1")",
-        "url":         "https://rss.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "znc": {
@@ -435,16 +399,16 @@ include 'neoenvs_header.php';
 		  <tr><td>time:</td> <td><?=\$datetime?></td></tr>
 		  <tr><td>&nbsp;</td> <td></td></tr>
 		  <tr><td><strong><?=\$local_hostname?></strong></td> <td></td></tr>
-		  <tr><td>location:</td> <td>myloc (Düsseldorf)</td></tr>
+		  <tr><td>location:</td> <td>Hetzner (Helsinki)</td></tr>
 		  <tr><td>os:</td> <td><?=\$local_os?></td></tr>
-		  <tr><td>disk space:</td> <td>2x1TB ssd</td></tr>
+		  <tr><td>disk space:</td> <td>2x512TB ssd-nvme | 2x1TB ssd-SATA</td></tr>
 		  <tr><td>services:</td> <td>$(print_srv_services 'core' "${sorted_services[@]}")</td></tr>
 		  <tr><td><hr></td> <td><hr></td></tr>
-		  <tr><td><strong>srv01.envs.net</strong></td> <td></td></tr>
+		  <tr><td><strong>ext.envs.net</strong></td> <td></td></tr>
 		  <tr><td>location:</td> <td>Hetzner (Falkenstein)</td></tr>
-		  <tr><td>os:</td> <td>Debian GNU/Linux 12 (bookworm)</td></tr>
-		  <tr><td>disk space:</td> <td>2x3.84TB ssd-nvme | 2x12TB hdd (media storage)</td></tr>
-		  <tr><td>services:</td> <td>$(print_srv_services 'srv01' "${sorted_services[@]}")</td></tr>
+		  <tr><td>os:</td> <td>Debian GNU/Linux 13 (trixie)</td></tr>
+		  <tr><td>disk space:</td> <td>40GB ssd-nvme</td></tr>
+		  <tr><td>services:</td> <td>secondary DNS and mail server</td></tr>
 		</table>
 	</div>
 
