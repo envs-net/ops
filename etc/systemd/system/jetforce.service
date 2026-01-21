@@ -9,8 +9,8 @@ RestartSec=5
 User=jetforce
 Group=jetforce
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/usr/local/bin/jetforce \
-    --host 89.163.145.170 \
+ExecStart=/srv/jetforce/.local/bin/jetforce \
+    --host 77.42.48.118 \
     --port 1965 \
     --hostname envs.net \
     --dir /var/gemini \

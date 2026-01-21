@@ -81,7 +81,7 @@ add_user() {
 
 	# set user quota
 	echo "$user	hard	nproc	200" | tee /etc/security/limits.d/"$user" >/dev/null 2>&1
-	setquota -u "$user" 1024M 1536M 0 0 /
+	xfs_quota -x -c "limit bsoft=1048576k bhard=1572864k $user" /home
 
 	# set mail aliases
 	echo "$user: $user@$domain" | tee -a /etc/aliases >/dev/null 2>&1
@@ -133,10 +133,6 @@ add_user() {
 	chmod go-r /home/"$user"/.muttrc
 	printf '\n%s\n' "$user" > /home/"$user"/.mutt/signature
 
-	# setup database
-	#add_user_mysql_db
-	#add_user_pgsql_db
-
 	# setup znc account
 	#sudo -u znc pkill -SIGUSR1 znc && pkill znc
 	#sudo -u znc /srv/znc/add_znc_user.sh "$user"
@@ -165,9 +161,7 @@ del_user() {
 	echo -e "$head_def\r\nTo: team-leave@$domain\r\nFrom: $user@$domain\r\nSubject: leave\r\n" | sudo -u "$user" sendmail team-leave@"$domain"
 
 	# stop user stuff
-	pgrep -u "$user"
-	ps -fp "$(pgrep -u "$user")"
-	killall -KILL -u "$user"
+	pkill -KILL -u "$user"
 
 	# remove user
 	userdel -rf "$user"
@@ -186,7 +180,6 @@ del_user() {
 
 	# remove database
 	del_user_mysql_db
-	del_user_pgsql_db
 
 	# unlink gemini
 	[ -L /var/gemini/\~"$user" ] && unlink /var/gemini/\~"$user"

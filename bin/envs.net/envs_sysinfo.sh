@@ -18,7 +18,7 @@ services=(bbj cryptpad drone getwtxt gitea gophernicus hedgedoc ipinfo
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 
-shells=(bash csh dash elvish fish ksh mksh sash tcsh xonsh yash zsh)
+shells=(bash csh dash elvish fish ksh mksh sash tcsh xonsh zsh)
 readarray -t sorted_shells < <(printf '%s\n' "${shells[@]}" | sort)
 
 
@@ -30,19 +30,19 @@ inet_clients=(alpine av98 bombadillo curl gomuks irssi lynx neomutt meli mutt mo
 readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 
-coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre dmd-compiler elixir erlang flex
-    g++ gcc gcl gdc gforth ghc go golang guile-2.2 inform julia lua5.1 lua5.2 lua5.3 mono-complete nasm nim nodejs
-    octave perl php picolisp ponyc python python2.7 python3 python3.13 racket ruby rustc scala tcl yasm vlang ziglang)
+coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre elixir erlang flex
+    g++ gcc gcl gdc ghc go golang guile-2.2 lua5.1 mono-complete nasm nodejs
+    octave perl php picolisp python3 racket ruby rustc scala tcl yasm vlang ziglang)
 readarray -t sorted_coding_pkg < <(printf '%s\n' "${coding_pkg[@]}" | sort)
 
 
-coding_tools=(ack bison build-essential cl-launch cvs devscripts ecl gawk git gron initscripts jq latex-mk latexmk
+coding_tools=(ack bison build-essential cl-launch cvs devscripts ecl gawk git gron jq latex-mk latexmk
     ninja-build make mawk mercurial rake ripgrep sbcl shellcheck subversion tcc texlive-full virtualenv yarn)
 readarray -t sorted_coding_tools < <(printf '%s\n' "${coding_tools[@]}" | sort)
 
 
-misc=(aria2 bc busybox burrow byobu clinte dict gfu goaccess hugo jekyll linac mariadb-client mandoc mathomatic mathtex mkdocs
-    pandoc pb pelican sagemath screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
+misc=(aria2 bc busybox burrow byobu clinte dict goaccess hugo jekyll mariadb-client mandoc mathomatic mkdocs
+    pandoc pb pelican screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 
 # do not add services here!
@@ -67,11 +67,9 @@ custom_pkg_desc() {
     bombadillo)  pkg_desc='Bombadillo is a non-web browser for the terminal';;
     burrow)      pkg_desc='a helper for building and managing a gopher hole';;
     clinte)      pkg_desc='a community notices system';;
-    gfu)         pkg_desc='A utility for formatting gophermaps';;
     go)          pkg_desc='tool for managing Go source code';;
     goaccess)    pkg_desc='fast web log analyzer and interactive viewer';;
     linac)       pkg_desc='LINAC is not a compiler';;
-    micro)       pkg_desc='a new modern terminal-based text editor';;
     pb)          pkg_desc='a helper utility for using 0x0 pastebin services';;
     python3.13)  pkg_desc="$(get_pkg_desc python3)";;
     twtxt)       pkg_desc='Decentralised, minimalist microblogging service for hackers';;
@@ -121,7 +119,7 @@ cat<<EOM > "$TMP_JSON"
       "gemini":       "gemini://$DOMAIN/",
       "email":        "hostmaster@$DOMAIN",
       "admin_email":  "sudoers@$DOMAIN",
-      "user_count":   $(find /home -mindepth 1 -maxdepth 1 | wc -l)
+      "user_count":   $(find /home -mindepth 1 -maxdepth 1 -type d | wc -l)
     },
     "SSHFP": {
       "RSA":          "SHA256:7dB470mfzlyhhtqmjnXciIxp+jWLACiYKC3EE/Z0lFg",
@@ -199,7 +197,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "jetforce": {
         "desc":        "tcp server for the gemini protocol",
-        "version":     "$(/usr/local/bin/jetforce -V | awk '{printf $2}')",
+        "version":     "$(/srv/jetforce/.local/bin/jetforce -V | awk '{printf $2}')",
         "url":         "https://gemini.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
@@ -211,7 +209,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "privatebin": {
         "desc":        "graphical pastebin",
-        "version":     "$(lxc-attach -n pb -- bash -c "awk '/Current version:/ {print \$3}' /var/www/PrivateBin/README.md | sed 's/*$//'")",
+        "version":     "-",
         "url":         "https://pb.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
@@ -239,13 +237,9 @@ cat<<EOM > "$TMP_JSON"
       "bombadillo":   "$(/usr/local/bin/bombadillo -v | awk '/Bombadillo/ {print $2}')",
       "burrow":       "$(/usr/local/bin/burrow -v | awk -Fv '{print $2}')",
       "clinte":       "$(/usr/local/bin/clinte -V | awk '/clinte/ {print $2}')",
-      "gfu":          "$(/usr/local/bin/gfu -v | sed '/version/s/.*version \([^ ][^ ]*\)[ ]*.*/\1/')",
       "go":           "$(awk -Fgo '{print $2}' /usr/local/go/VERSION)",
       "goaccess":     "$(/usr/bin/goaccess -V | awk '/GoAccess/ {print $3}')",
-      "linac":        "$(/usr/local/sbin/linac help | head -1 | awk '{print $2}')",
-      "micro":        "$(/usr/local/bin/micro -version | awk '/Version/ {print $2}')",
       "pb":           "$(/usr/local/bin/pb -v)",
-      "python3.13":   "$(/usr/local/bin/python3.13 --version | awk '{print $2}')",
       "twtxt":        "$(/usr/local/bin/twtxt --version | awk '/version/ {printf $3}')",
       "txtnish":      "$(/usr/local/bin/txtnish -V)",
       "vf1":          "$(/usr/local/bin/vf1 --version | awk '/VF-1/ {print $2}')",

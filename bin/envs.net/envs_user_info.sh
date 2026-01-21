@@ -77,16 +77,17 @@ cat << EOM > "$TMP_JSON"
       "gemini":       "gemini://$DOMAIN/",
       "email":        "hostmaster@$DOMAIN",
       "admin_email":  "sudoers@$DOMAIN",
-      "user_count":   $(find /home -mindepth 1 -maxdepth 1 | wc -l),
+      "user_count":   $(find /home -mindepth 1 -maxdepth 1 -type d | wc -l),
       "want_users":   true
     },
     "users": {
 EOM
 # user header
-    for USERNAME in /home/*
+    for USER_HOME in /home/*
     do
-      USER_HOME="$USERNAME"
-      USERNAME="${USERNAME/\/home\//}"
+      [ -d "$USER_HOME" ] || continue
+
+      USERNAME="${USER_HOME##*/}"
       INFO_FILE="$USER_HOME/.envs"
 
       cat << EOM >> "$TMP_JSON"
