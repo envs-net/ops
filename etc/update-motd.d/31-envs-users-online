@@ -1,8 +1,13 @@
 #!/bin/bash
 
-printf 'users online: %s | total: %s\n' "$(users | tr ' ' \\n | uniq | wc -l)" "$(ls /home | wc -l)"
-printf 'allocated ttys: %s\n\n' "$(users | wc -w)"
+online_users=$(who | awk '{print $1}' | sort -u | wc -l)
+total_users=$(ls -1 /home | wc -l)
+ttys_allocated=$(who | wc -l)
 
-users | tr ' ' \\n | uniq | column
+printf "users online: %s | total users: %s\n" "$online_users" "$total_users"
+printf "allocated ttys: %s\n\n" "$ttys_allocated"
+
+printf "currently logged in users:\n"
+who | awk '{print $1}' | sort -u | column
 
 printf '\n###\n'

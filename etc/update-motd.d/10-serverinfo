@@ -35,5 +35,3 @@ zombies=$(ps axo stat= | awk '$1 ~ /^Z/ { c++ } END { print c+0 }')
 if [ "$zombies" -gt 0 ]; then
     printf '\n   => There are %s zombie processes.\n' "$zombies"
 fi
-
-printf '\n'

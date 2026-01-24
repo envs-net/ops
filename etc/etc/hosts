@@ -1,12 +1,15 @@
-127.0.0.1	localhost
-127.0.1.1	core.envs.net	core
+#127.0.0.1		localhost core.envs.net core
+127.0.0.1		localhost
+127.0.1.1		core.envs.net core
 
-# The following lines are desirable for IPv6 capable hosts
 ::1     localhost ip6-localhost ip6-loopback
 ff02::1 ip6-allnodes
 ff02::2 ip6-allrouters
 
-#
-# ENVS.NET - LXC
-#
-192.168.100.2	ns.envs.net envs-ns ns
+77.42.48.118	envs.net core.envs.net ip.envs.net
+192.168.100.1	bbj.envs.net gopher.envs.net help.envs.net ttbp.envs.net twtxt.envs.net irc.envs.net webirc.envs.net znc.envs.net
+
+# LXC
+192.168.100.2	ns.envs.net envs-ns
+192.168.100.3	mail.envs.net envs-mail
+192.168.100.4	lists.envs.net envs-lists

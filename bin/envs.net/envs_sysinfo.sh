@@ -13,7 +13,7 @@ TMP_JSON='/tmp/sysinfo.json_tmp'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(bbj cryptpad drone getwtxt gitea gophernicus hedgedoc ipinfo
+services=(bbj cryptpad drone getwtxt gitea gophernicus hedgedoc ipinfo ntfy
     jetforce mariadb-server nginx openssh-server pleroma privatebin searxng thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -193,6 +193,12 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "ip address info",
         "version":     "-",
         "url":         "https://ip.$DOMAIN/",
+        "server":      "core.$DOMAIN"
+      },
+      "ntfy": {
+        "desc":        "a simple HTTP-based pub-sub notification service",
+        "version":     "$(dpkg -s ntfy | awk '/Version:/ {print $2}')",
+        "url":         "https://ntfy.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "jetforce": {
