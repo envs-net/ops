@@ -13,7 +13,7 @@ TMP_JSON='/tmp/sysinfo.json_tmp'
 ###
 
 # define packages by category for sysinfo.php Page
-services=(bbj cryptpad drone getwtxt gitea gophernicus hedgedoc ipinfo ntfy
+services=(bbj cryptpad dns drone getwtxt gitea gophernicus hedgedoc ipinfo ntfy
     jetforce mariadb-server nginx openssh-server pleroma privatebin searxng thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
@@ -157,6 +157,12 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "collaborative real time editing",
         "version":     "$(curl -fs https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
         "url":         "https://pad.$DOMAIN/",
+        "server":      "core.$DOMAIN"
+      },
+      "dns": {
+        "desc":        "public dns-server with doh and dot",
+        "version":     "-",
+        "url":         "https://dns.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "drone": {
