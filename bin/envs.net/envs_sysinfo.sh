@@ -160,7 +160,7 @@ cat<<EOM > "$TMP_JSON"
         "server":      "core.$DOMAIN"
       },
       "dns": {
-        "desc":        "public dns-server with doh and dot",
+        "desc":        "public dns resolver supporting doh and dot",
         "version":     "-",
         "url":         "https://dns.$DOMAIN/",
         "server":      "core.$DOMAIN"
