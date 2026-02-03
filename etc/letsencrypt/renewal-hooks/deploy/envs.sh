@@ -13,6 +13,9 @@ for domain in $RENEWED_DOMAINS; do
 			cat "$RENEWED_LINEAGE/fullchain.pem" > "$daemon_cert_root/fullchain.pem"
 			cat /etc/ssl/certs/envs_dhparam.pem > "$daemon_cert_root/envs_dhparam.pem"
 
+			systemctl reload nginx
+			prosodyctl reload
+
 			# jetforce
 			systemctl restart jetforce
 

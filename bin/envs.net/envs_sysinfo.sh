@@ -31,7 +31,7 @@ readarray -t sorted_inet_clients < <(printf '%s\n' "${inet_clients[@]}" | sort)
 
 
 coding_pkg=(cargo clang clisp clojure crystal default-jdk default-jre elixir erlang flex
-    g++ gcc gcl gdc ghc go golang guile-2.2 lua5.1 mono-complete nasm nodejs
+    g++ gcc gcl gdc ghc go golang guile-2.2 lua5.1 lua5.4 luarocks mono-complete nasm nodejs
     octave perl php picolisp python3 racket ruby rustc scala tcl yasm vlang ziglang)
 readarray -t sorted_coding_pkg < <(printf '%s\n' "${coding_pkg[@]}" | sort)
 
@@ -41,7 +41,7 @@ coding_tools=(ack bison build-essential cl-launch cvs devscripts ecl gawk git gr
 readarray -t sorted_coding_tools < <(printf '%s\n' "${coding_tools[@]}" | sort)
 
 
-misc=(aria2 bc busybox burrow byobu clinte dict goaccess hugo jekyll mariadb-client mandoc mathomatic mkdocs
+misc=(aria2 bc busybox burrow byobu clinte dict goaccess hugo jekyll linac mariadb-client mandoc mathomatic mkdocs
     pandoc pb pelican screen sqlite3 tmux todotxt-cli twtxt txtnish zola)
 readarray -t sorted_misc < <(printf '%s\n' "${misc[@]}" | sort)
 

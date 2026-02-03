@@ -19,7 +19,7 @@ awk '
 /^MemFree:/  { printf "   MemFree:\t%s %s\n", $2, $3 }
 ' /proc/meminfo
 
-df -h --output=target,size,used,avail,pcent / /home | awk '
+df -h --output=target,size,used,avail,pcent / /var /home | awk '
 NR==1 { next }
 BEGIN {
     printf "   disk space:  %-8s %7s | %7s | %7s\n", "(mount)", "total", "used", "free"

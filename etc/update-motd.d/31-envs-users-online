@@ -1,7 +1,7 @@
 #!/bin/bash
 
 online_users=$(who | awk '{print $1}' | sort -u | wc -l)
-total_users=$(ls -1 /home | wc -l)
+total_users=$(ls -df /home/*/ | wc -l)
 ttys_allocated=$(who | wc -l)
 
 printf "users online: %s | total users: %s\n" "$online_users" "$total_users"

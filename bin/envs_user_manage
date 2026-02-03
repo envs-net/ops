@@ -78,6 +78,7 @@ EOM
 
 add_user() {
 	useradd -m -g 9999 -s /bin/bash -p "$pwcrypt" "$user"
+	usermod -aG xmppusers "$user"
 
 	# set user quota
 	echo "$user	hard	nproc	200" | tee /etc/security/limits.d/"$user" >/dev/null 2>&1
