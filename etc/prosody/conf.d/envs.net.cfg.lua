@@ -15,7 +15,6 @@ s2s_direct_tls_ports = { 5270 }
 http_interfaces = { "127.0.0.1", "::1" }
 http_ports = { 5280 }
 https_interfaces = {}
-http_external_url = "https://upload.envs.net"
 
 ssl = {
 	key = "/etc/letsencrypt/live/envs.net/privkey.pem";
@@ -34,6 +33,14 @@ limits = {
 	s2s = {
 		rate = "100kb/s";
 		burst = "256kb";
+	};
+}
+
+http_cors_override = {
+	["*"] = {
+		"GET";
+		"POST";
+		"OPTIONS";
 	};
 }
 
@@ -149,6 +156,15 @@ Component "conference.envs.net" "muc"
 	}
 
 -- ======================
+-- HTTP FILE UPLOAD COMPONENT
+-- ======================
+
+Component "upload.envs.net" "http_file_share"
+	modules_disabled = { "s2s"; }
+	http_external_url = "https://upload.envs.net"
+	http_file_share_cors = true
+
+-- ======================
 -- PUBSUB COMPONENT
 -- ======================
 
@@ -156,12 +172,12 @@ Component "pubsub.envs.net" "pubsub"
 	pubsub_max_items = 1000
 
 -- ======================
--- HTTP FILE UPLOAD COMPONENT
+-- SOCKS5 BYTESTREAMS PROXY (XEP-0065)
 -- ======================
 
-Component "upload.envs.net" "http_file_share"
+Component "xmppproxy.envs.net" "proxy65"
+	proxy65_address = "envs.net"
 	modules_disabled = { "s2s"; }
-	http_file_share_cors = true
 
 ---------------------------------------------------
 
