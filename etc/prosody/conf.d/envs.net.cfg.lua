@@ -15,6 +15,11 @@ s2s_direct_tls_ports = { 5270 }
 http_interfaces = { "127.0.0.1", "::1" }
 http_ports = { 5280 }
 https_interfaces = {}
+trusted_proxies = { "127.0.0.1", "::1" }
+
+http_cors_override = {
+	["*"] = { "GET"; "POST"; "OPTIONS" }
+}
 
 ssl = {
 	key = "/etc/letsencrypt/live/envs.net/privkey.pem";
@@ -35,14 +40,7 @@ limits = {
 		burst = "256kb";
 	};
 }
-
-http_cors_override = {
-	["*"] = {
-		"GET";
-		"POST";
-		"OPTIONS";
-	};
-}
+unlimited_jids = { "creme@envs.net" }
 
 -- ======================
 -- MODULES ENABLED
@@ -74,6 +72,7 @@ modules_enabled = {
 	"mam";
 
 	-- Security / Stability
+	"sasl_ssdp";
 	"limits";
 	"ping";
 	"ping_muc";
@@ -92,11 +91,10 @@ modules_enabled = {
 
 	"reload_modules";
 	"turn_external";
-	"default_bookmarks";
 	"http_altconnect";
 }
 
---
+-------------------------
 smacks_hibernation_time = 14400
 
 -- MAM (Message Archive)
@@ -121,15 +119,37 @@ VirtualHost "envs.net"
 	cyrus_service_name = "xmpp"
 	allow_registration = false
 
+	modules_enabled = {
+		"default_bookmarks";
+		"http_altconnect";
+		"server_contact_info";
+	}
+
 	turn_external_host = "turn.envs.net"
 	turn_external_secret = "xxx"
 	turn_external_ttl = 86400
 
 	push_keepalive = 60
 
+	http_external_url = "https://envs.net"
+	http_cors_override = {
+		["*"] = { "GET"; "POST"; "OPTIONS" }
+	}
+
 	disco_items = {
 		{ "conference.envs.net", "Public Channels" };
 		{ "pubsub.envs.net", "PubSub Service" };
+	}
+
+	default_bookmarks = {
+		{ jid = "envs@conference.envs.net"; name = "envs"; autojoin = true };
+		{ jid = "lounge@conference.envs.net"; name = "lounge"; autojoin = true };
+	}
+
+	contact_info = {
+		abuse = { "mailto:hostmaster@envs.net" };
+		admin = { "mailto:hostmaster@envs.net", "xmpp:creme@envs.net" };
+		security = { "mailto:security@envs.net" };
 	}
 
 -- ======================
@@ -152,7 +172,7 @@ Component "conference.envs.net" "muc"
 		persistent = true;
 		public = true;
 		members_only = false;
-		moderated = true;
+		moderated = false;
 	}
 
 -- ======================
@@ -163,6 +183,9 @@ Component "upload.envs.net" "http_file_share"
 	modules_disabled = { "s2s"; }
 	http_external_url = "https://upload.envs.net"
 	http_file_share_cors = true
+	http_cors_override = {
+		["*"] = { "GET"; "POST"; "OPTIONS" }
+	}
 
 -- ======================
 -- PUBSUB COMPONENT
@@ -179,17 +202,6 @@ Component "xmppproxy.envs.net" "proxy65"
 	proxy65_address = "envs.net"
 	modules_disabled = { "s2s"; }
 
----------------------------------------------------
+-------------------------
 
 reload_modules = { "tls" }
-
-contact_info = {
-		abuse = "mailto:hostmaster@envs.net";
-		admin = "mailto:hostmaster@envs.net", "xmpp:creme@envs.net";
-		security = { "mailto:security@envs.net" };
-}
-
-default_bookmarks = {
-	{ jid = "envs@conference.envs.net"; name = "envs"; autojoin = true };
-	{ jid = "lounge@conference.envs.net"; name = "lounge"; autojoin = true };
-}
