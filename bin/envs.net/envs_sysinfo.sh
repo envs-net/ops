@@ -14,7 +14,7 @@ TMP_JSON='/tmp/sysinfo.json_tmp'
 
 # define packages by category for sysinfo.php Page
 services=(bbj cryptpad dns drone getwtxt gitea gophernicus hedgedoc ipinfo ntfy
-    jetforce mariadb-server nginx openssh-server pleroma privatebin searxng thelounge znc)
+    jetforce mariadb-server nginx openssh-server pleroma privatebin prosody searxng thelounge znc)
 readarray -t sorted_services < <(printf '%s\n' "${services[@]}" | sort)
 
 

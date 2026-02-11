@@ -77,7 +77,6 @@ modules_enabled = {
 	"ping";
 	"ping_muc";
 	"s2s_keepalive";
-	"server_contact_info";
 
 	-- Admin
 	"admin_shell";
@@ -91,7 +90,6 @@ modules_enabled = {
 
 	"reload_modules";
 	"turn_external";
-	"http_altconnect";
 }
 
 -------------------------
@@ -123,7 +121,13 @@ VirtualHost "envs.net"
 		"default_bookmarks";
 		"http_altconnect";
 		"server_contact_info";
+		"server_info";
+		"pubsub_serverinfo";
 	}
+
+	pubsub_serverinfo_node = "serverinfo"
+	pubsub_serverinfo_service = "pubsub.envs.net"
+	pubsub_serverinfo_publish_user_count = true
 
 	turn_external_host = "turn.envs.net"
 	turn_external_secret = "xxx"
@@ -192,6 +196,7 @@ Component "upload.envs.net" "http_file_share"
 -- ======================
 
 Component "pubsub.envs.net" "pubsub"
+	admins = { "envs.net" }
 	pubsub_max_items = 1000
 
 -- ======================
