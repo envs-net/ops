@@ -137,7 +137,7 @@ cat<<EOM > "$TMP_JSON"
         "cpucount":     "$(/opt/sysinfo.sh get cpucount)"
       },
       "ext.$DOMAIN": {
-        "location":     "Hetzner (Falkenstein)",
+        "location":     "netcup (Nürnberg)",
         "os":           "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get os')",
         "uptime":       "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get uptime')",
         "uname":        "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get uname')",
@@ -217,7 +217,7 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "federated social network - microblogging",
         "version":     "$(curl -fs https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
         "url":         "https://pleroma.$DOMAIN/",
-        "server":      "core.$DOMAIN"
+        "server":      "ext.$DOMAIN"
       },
       "privatebin": {
         "desc":        "graphical pastebin",
@@ -411,10 +411,10 @@ include 'neoenvs_header.php';
 		  <tr><td>services:</td> <td>$(print_srv_services 'core' "${sorted_services[@]}")</td></tr>
 		  <tr><td><hr></td> <td><hr></td></tr>
 		  <tr><td><strong>ext.envs.net</strong></td> <td></td></tr>
-		  <tr><td>location:</td> <td>Hetzner (Falkenstein)</td></tr>
+		  <tr><td>location:</td> <td>netcup (Nürnberg)</td></tr>
 		  <tr><td>os:</td> <td>Debian GNU/Linux 13 (trixie)</td></tr>
-		  <tr><td>disk space:</td> <td>40GB ssd-nvme</td></tr>
-		  <tr><td>services:</td> <td>secondary DNS and mail server</td></tr>
+		  <tr><td>disk space:</td> <td>512GB ssd-nvme</td></tr>
+		  <tr><td>services:</td> <td>secondary DNS and mail server, $(print_srv_services 'ext' "${sorted_services[@]}")</td></tr>
 		</table>
 	</div>
 
