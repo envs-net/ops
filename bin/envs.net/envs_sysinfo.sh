@@ -127,8 +127,17 @@ cat<<EOM > "$TMP_JSON"
       "ED25519":      "SHA256:V+mXTsRJ+jfJMxxPlD/28dpWouuns3Wuqwppv6ykVC8"
     },
     "system": {
-      "core.$DOMAIN": {
+      "srv.$DOMAIN": {
         "location":     "Hetzner (Helsinki)",
+        "os":           "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get os')",
+        "uptime":       "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get uptime')",
+        "uname":        "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get uname')",
+        "board":        "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get board')",
+        "cpuinfo":      "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get cpuinfo')",
+        "cpucount":     "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get cpucount')"
+      },
+      "core.$DOMAIN": {
+        "location":     "VM on srv.envs.net",
         "os":           "$(/opt/sysinfo.sh get os)",
         "uptime":       "$(/opt/sysinfo.sh get uptime)",
         "uname":        "$(/opt/sysinfo.sh get uname)",
@@ -157,19 +166,19 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "collaborative real time editing",
         "version":     "$(curl -fs https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
         "url":         "https://pad.$DOMAIN/",
-        "server":      "core.$DOMAIN"
+        "server":      "srv.$DOMAIN"
       },
       "dns": {
         "desc":        "public dns resolver supporting doh and dot",
         "version":     "-",
         "url":         "https://dns.$DOMAIN/",
-        "server":      "core.$DOMAIN"
+        "server":      "srv.$DOMAIN"
       },
       "drone": {
         "desc":        "continuous delivery platform",
         "version":     "$(curl -fs https://drone."$DOMAIN"/version | jq -Mr .version)",
         "url":         "https://drone.$DOMAIN/",
-        "server":      "core.$DOMAIN"
+        "server":      "srv.$DOMAIN"
       },
       "getwtxt": {
         "desc":        "twtxt registry service - microblogging for hackers",
@@ -181,7 +190,7 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "painless self-hosted git service",
         "version":     "$(curl -fs https://git."$DOMAIN"/api/v1/version | jq -Mr .version)",
         "url":         "https://git.$DOMAIN/",
-        "server":      "core.$DOMAIN"
+        "server":      "srv.$DOMAIN"
       },
       "gophernicus": {
         "desc":        "modern full-featured (and hopefully) secure gopher daemon",
@@ -193,7 +202,7 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "collaborative real time markdown",
         "version":     "$(curl -Is https://hedgedoc."$DOMAIN"/ | awk '/^hedgedoc-version:/{print $2}'| tr -d "\015")",
         "url":         "https://hedgedoc.$DOMAIN/",
-        "server":      "core.$DOMAIN"
+        "server":      "srv.$DOMAIN"
       },
       "ipinfo": {
         "desc":        "ip address info",
@@ -223,13 +232,13 @@ cat<<EOM > "$TMP_JSON"
         "desc":        "graphical pastebin",
         "version":     "-",
         "url":         "https://pb.$DOMAIN/",
-        "server":      "core.$DOMAIN"
+        "server":      "srv.$DOMAIN"
       },
       "searxng": {
         "desc":        "privacy-respecting metasearch engine",
         "version":     "$(curl -fs https://searx."$DOMAIN"/config | jq -Mr .version)",
         "url":         "https://searx.$DOMAIN/",
-        "server":      "core.$DOMAIN"
+        "server":      "srv.$DOMAIN"
       },
       "thelounge": {
         "desc":        "self-hosted web irc client",
@@ -404,11 +413,17 @@ include 'neoenvs_header.php';
 		  <tr><th class="tw13_75"></th> <th></th></tr>
 		  <tr><td>time:</td> <td><?=\$datetime?></td></tr>
 		  <tr><td>&nbsp;</td> <td></td></tr>
-		  <tr><td><strong><?=\$local_hostname?></strong></td> <td></td></tr>
+		  <tr><td><strong>srv.envs.net</strong></td> <td></td></tr>
 		  <tr><td>location:</td> <td>Hetzner (Helsinki)</td></tr>
-		  <tr><td>os:</td> <td><?=\$local_os?></td></tr>
+		  <tr><td>os:</td> <td>Debian GNU/Linux 13 (trixie)</td></tr>
 		  <tr><td>disk space:</td> <td>2x512TB ssd-nvme | 2x1TB ssd-SATA</td></tr>
-		  <tr><td>services:</td> <td>$(print_srv_services 'core' "${sorted_services[@]}")</td></tr>
+		  <tr><td>services:</td> <td>$(print_srv_services 'srv' "${sorted_services[@]}")</td></tr>
+		  <tr><td><hr></td> <td><hr></td></tr>
+		  <tr><td><strong><?=\$local_hostname?></strong></td> <td></td></tr>
+		  <tr><td>location:</td> <td>VM on srv.envs.net</td></tr>
+		  <tr><td>os:</td> <td><?=\$local_os?></td></tr>
+		  <tr><td>disk space:</td> <td>150GB ssd-nvme <small>(/)</small> | 500GB ssd-SATA <small>(/var /home)</small></td></tr>
+		  <tr><td>services:</td> <td>tilde shell $(print_srv_services 'core' "${sorted_services[@]}")</td></tr>
 		  <tr><td><hr></td> <td><hr></td></tr>
 		  <tr><td><strong>ext.envs.net</strong></td> <td></td></tr>
 		  <tr><td>location:</td> <td>netcup (Nürnberg)</td></tr>
