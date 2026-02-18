@@ -234,6 +234,12 @@ cat<<EOM > "$TMP_JSON"
         "url":         "https://pb.$DOMAIN/",
         "server":      "srv.$DOMAIN"
       },
+      "prosody": {
+        "desc":        "lightweight jabber/xmpp server",
+        "version":     "$(dpkg -s prosody | awk '/Version:/ {print $2}')",
+        "url":         "https://xmpp.$DOMAIN/",
+        "server":      "core.$DOMAIN"
+      },
       "searxng": {
         "desc":        "privacy-respecting metasearch engine",
         "version":     "$(curl -fs https://searx."$DOMAIN"/config | jq -Mr .version)",
