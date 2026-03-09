@@ -17,10 +17,26 @@ for domain in $RENEWED_DOMAINS; do
 			prosodyctl reload
 
 			# jetforce
+			jf_dir=/srv/jetforce/ssl
+			cat "$RENEWED_LINEAGE/privkey.pem" > "$jf_dir/privkey.pem"
+			cat "$RENEWED_LINEAGE/chain.pem" > "$jf_dir/chain.pem"
+			cat "$RENEWED_LINEAGE/fullchain.pem" > "$jf_dir/fullchain.pem"
+			cat /etc/ssl/certs/envs_dhparam.pem > "$jf_dir/envs_dhparam.pem"
 			systemctl restart jetforce
 
 			# mailinglists
 			lxc-attach -n lists -- bash -c "systemctl reload nginx postfix"
+		;;
+
+		turn.envs.net)
+			turn_dir=/etc/coturn
+			umask 077
+			cat "$RENEWED_LINEAGE/privkey.pem" > "$turn_dir/privkey.pem"
+			cat "$RENEWED_LINEAGE/cert.pem" > "$turn_dir/cert.pem"
+			cat "$RENEWED_LINEAGE/chain.pem" > "$turn_dir/chain.pem"
+			cat "$RENEWED_LINEAGE/fullchain.pem" > "$turn_dir/fullchain.pem"
+			chmod 644 "$turn_dir"/*.pem
+			systemctl restart coturn
 		;;
 
 		znc.envs.net)

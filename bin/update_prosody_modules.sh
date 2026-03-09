@@ -17,6 +17,7 @@ MODULES=(
     mod_cloud_notify_priority_tag
     mod_csi_battery_saver
     mod_default_bookmarks
+    mod_firewall
     mod_http_altconnect
     mod_measure_active_users
     mod_muc_moderation
@@ -25,6 +26,7 @@ MODULES=(
     mod_ping_muc
     mod_pubsub_serverinfo
     mod_reload_modules
+    mod_muc_rtbl
     mod_s2s_bidi
     mod_s2s_keepalive
     mod_sasl2

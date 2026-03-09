@@ -39,7 +39,7 @@ limits = {
 	c2s = { rate = "30kb/s"; burst = "200kb"; };
 	s2s = { rate = "100kb/s"; burst = "256kb"; };
 }
-unlimited_jids = { "creme@envs.net" }
+unlimited_jids = { "creme@envs.net"; "adminbot@envs.net" }
 
 -- ======================
 -- MODULES ENABLED
@@ -95,6 +95,7 @@ modules_enabled = {
 
 	"reload_modules";
 	"turn_external";
+	"server_info";
 }
 
 -------------------------
@@ -103,10 +104,8 @@ smacks_max_queue_size = 4000
 
 -- MAM (Message Archive)
 mam_enabled = true
-mam_archive_default = true
-mam_expire_after_days = 30
-mam_archive_days = 30
 mam_smart_enable = false
+archive_expires_after = "30d"
 
 -- File upload
 http_file_share_size_limit = 32*1024*1024
@@ -130,7 +129,7 @@ VirtualHost "envs.net"
 		"server_contact_info";
 		"server_info";
 		"pubsub_serverinfo";
-		"pastebin";
+--		"firewall";
 	}
 
 	push_keepalive = 60
@@ -147,12 +146,9 @@ VirtualHost "envs.net"
 	turn_external_secret = "xxx"
 	turn_external_ttl = 86400
 
-	pastebin_threshold = 1500
-	pastebin_line_threshold = 10
-	pastebin_expire_after = 720
-	pastebin_html_preview = true
-	pastebin_trigger = "!paste"
-	pastebin_ignore = "!nopaste"
+--	firewall_scripts = {
+--		"/etc/prosody/firewall/firewall.pfw"
+--	}
 
 	disco_items = {
 		{ "conference.envs.net", "Public Channels" };
@@ -182,11 +178,12 @@ Component "conference.envs.net" "muc"
 		"muc_mam";
 		"muc_moderation";
 		"muc_notifications";
-		"pastebin";
 	}
 
 	muc_room_locking = true
 	muc_tombstones = true
+	muc_log_expires_after = "30d"
+	muc_log_cleanup_interval = 4*60*60
 
 	muc_default_room_options = {
 		persistent = true;
@@ -194,13 +191,6 @@ Component "conference.envs.net" "muc"
 		members_only = false;
 		moderated = false;
 	}
-
-	pastebin_threshold = 1500
-	pastebin_line_threshold = 10
-	pastebin_expire_after = 720
-	pastebin_html_preview = true
-	pastebin_trigger = "!paste"
-	pastebin_ignore = "!nopaste"
 
 -- ======================
 -- HTTP FILE UPLOAD COMPONENT
