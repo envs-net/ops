@@ -139,10 +139,12 @@ EOM
         if [ -f "$USER_HOME"/public_gemini/index.gmi ]; then
           cat << EOM >> "$TMP_JSON"
         "gemini":      "gemini://$DOMAIN/~$USERNAME/",
+        "geminiproxy": "https://gemini.$DOMAIN/~$USERNAME/",
 EOM
         else
           cat << EOM >> "$TMP_JSON"
         "gemini":      "",
+        "geminiproxy": "",
 EOM
         fi
 # blog
