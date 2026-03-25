@@ -1,2 +1,2 @@
 #!/usr/bin/env bash
-find /var/signups_pending/ -name "*.json" -type f -mtime +2 -delete
+find /var/signups_pending/ /var/signup_limits/ -type f -mtime +2 -delete
