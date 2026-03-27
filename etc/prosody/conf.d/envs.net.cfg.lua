@@ -7,6 +7,8 @@ admins = { "creme@envs.net" }
 network_backend = "epoll";
 use_libunbound = true
 
+storage = "internal"
+
 s2s_secure_auth = true
 c2s_require_encryption = true
 s2s_require_encryption = true
@@ -88,10 +90,10 @@ modules_enabled = {
 	"admin_adhoc";
 
 	-- others
-	"account_activity";
 	"time";
 	"uptime";
 	"version";
+	"account_activity";
 
 	"reload_modules";
 	"turn_external";
@@ -105,13 +107,13 @@ smacks_max_queue_size = 4000
 -- MAM (Message Archive)
 mam_enabled = true
 mam_smart_enable = false
-archive_expires_after = "30d"
+archive_expires_after = "90d"
 
 -- File upload
 http_file_share_size_limit = 32*1024*1024
 http_file_share_global_quota = 30*1024*1024*1024
-http_file_share_quota = 512*1024*1024
-http_file_share_expires_after = "30 days"
+http_file_share_quota = 10240*1024*1024
+http_file_share_expires_after = "90 days"
 
 -- ======================
 -- VIRTUAL HOST
@@ -171,6 +173,7 @@ VirtualHost "envs.net"
 -- ======================
 
 Component "conference.envs.net" "muc"
+	storage = "internal"
 	name = "Rooms"
 	restrict_room_creation = "local"
 
@@ -182,7 +185,7 @@ Component "conference.envs.net" "muc"
 
 	muc_room_locking = true
 	muc_tombstones = true
-	muc_log_expires_after = "30d"
+	muc_log_expires_after = "90d"
 	muc_log_cleanup_interval = 4*60*60
 
 	muc_default_room_options = {
