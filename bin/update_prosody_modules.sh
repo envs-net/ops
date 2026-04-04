@@ -27,6 +27,7 @@ MODULES=(
     mod_pubsub_serverinfo
     mod_reload_modules
     mod_muc_rtbl
+    mod_muc_offline_delivery
     mod_s2s_bidi
     mod_s2s_keepalive
     mod_sasl2

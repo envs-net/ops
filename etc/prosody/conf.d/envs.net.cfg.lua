@@ -41,7 +41,7 @@ limits = {
 	c2s = { rate = "30kb/s"; burst = "200kb"; };
 	s2s = { rate = "100kb/s"; burst = "256kb"; };
 }
-unlimited_jids = { "creme@envs.net"; "adminbot@envs.net" }
+unlimited_jids = { "creme@envs.net"; "adminbot@envs.net"; "envsbot@envs.net" }
 
 -- ======================
 -- MODULES ENABLED
@@ -94,6 +94,7 @@ modules_enabled = {
 	"uptime";
 	"version";
 	"account_activity";
+	"private";
 
 	"reload_modules";
 	"turn_external";
@@ -180,7 +181,7 @@ Component "conference.envs.net" "muc"
 	modules_enabled = {
 		"muc_mam";
 		"muc_moderation";
-		"muc_notifications";
+--		"muc_offline_delivery";
 	}
 
 	muc_room_locking = true
@@ -214,6 +215,7 @@ Component "upload.envs.net" "http_file_share"
 Component "pubsub.envs.net" "pubsub"
 	admins = { "envs.net" }
 	pubsub_max_items = 1000
+	expose_publisher = true
 
 -- ======================
 -- SOCKS5 BYTESTREAMS PROXY (XEP-0065)
