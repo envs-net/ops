@@ -24,6 +24,17 @@ for domain in $RENEWED_DOMAINS; do
 			cat /etc/ssl/certs/envs_dhparam.pem > "$jf_dir/envs_dhparam.pem"
 			systemctl restart jetforce
 
+			# mumble
+			mum_dir=/etc/mumble/ssl
+			cat "$RENEWED_LINEAGE/privkey.pem" > "$mum_dir/privkey.pem"
+			cat "$RENEWED_LINEAGE/chain.pem" > "$mum_dir/chain.pem"
+			cat "$RENEWED_LINEAGE/fullchain.pem" > "$mum_dir/fullchain.pem"
+			cat /etc/ssl/certs/envs_dhparam.pem > "$mum_dir/envs_dhparam.pem"
+
+			chown mumble-server:mumble-server "$mum_dir"/*.pem
+			chmod 600 "$mum_dir"/*.pem
+			systemctl restart mumble-server
+
 			# mailinglists
 			lxc-attach -n lists -- bash -c "systemctl reload nginx postfix"
 		;;
