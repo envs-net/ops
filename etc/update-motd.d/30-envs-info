@@ -19,7 +19,7 @@ cool things to do while you're here on envs.net:
 * profanity   - instant messaging client for xmpp (jabber)
 * gomuks      - a terminal based matrix client written in go
 * pb          - command line pastebin
-* privatebin  - tool to managing privatebin pastes
+* pbcli       - tool to managing privatebin pastes
 * todo-txt    - simple todo managing
 * burrow      - manage your gopherhole - try burrow -h to see the options
 * hole        - open our envs.net gopherhole
