@@ -248,7 +248,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "libretranslate": {
         "desc":        "free and open source machine translation api",
-        "version":     "-",
+        "version":     "$(curl -fs https://translate."$DOMAIN"/spec | jq -r '.info.version')",
         "url":         "https://translate.$DOMAIN/",
         "server":      "srv.$DOMAIN"
       },
