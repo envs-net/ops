@@ -1,16 +1,51 @@
 [Unit]
-Description=gopherproxy.service
-After=network-online.target nginx.service
+Description=gopherproxy HTTP-to-Gopher gateway
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60s
+StartLimitBurst=3
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/services/go/src/github.com/envs-net/gopherproxy/
-ExecStart=/opt/services/go/src/github.com/envs-net/gopherproxy/gopherproxy -bind 127.0.0.1:8993 -uri envs.net
 User=services
-Restart=always
-RestartSec=5
-StartLimitInterval=60s
-StartLimitBurst=3
+WorkingDirectory=/srv/gopherproxy
+
+ExecStart=/srv/gopherproxy/gopherproxy \
+    -bind 127.0.0.1:8993 \
+    -uri envs.net \
+    -robots-file /srv/gopherproxy/robots.txt \
+    -cache-ttl 30s \
+    -rate-limit 60 \
+    -trust-proxy-headers
+
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RemoveIPC=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+UMask=0077
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

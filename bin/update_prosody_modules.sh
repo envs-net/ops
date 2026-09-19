@@ -27,6 +27,7 @@ MODULES=(
     mod_pubsub_serverinfo
     mod_reload_modules
     mod_muc_rtbl
+    mod_muc_limits
     mod_muc_offline_delivery
     mod_s2s_bidi
     mod_s2s_keepalive
@@ -36,6 +37,7 @@ MODULES=(
     mod_sasl2_fast
     mod_sasl_ssdp
     mod_track_muc_joins
+    mod_throttle_unsolicited
 )
 
 echo "=== Starting Prosody module update ==="

@@ -41,7 +41,7 @@ limits = {
 	c2s = { rate = "30kb/s"; burst = "200kb"; };
 	s2s = { rate = "100kb/s"; burst = "256kb"; };
 }
-unlimited_jids = { "creme@envs.net"; "adminbot@envs.net"; "envsbot@envs.net" }
+unlimited_jids = { "creme@envs.net"; "adminbot@envs.net" }
 
 -- ======================
 -- MODULES ENABLED
@@ -99,6 +99,7 @@ modules_enabled = {
 	"reload_modules";
 	"turn_external";
 	"server_info";
+	"throttle_unsolicited";
 }
 
 -------------------------
@@ -115,6 +116,10 @@ http_file_share_size_limit = 32*1024*1024
 http_file_share_global_quota = 30*1024*1024*1024
 http_file_share_quota = 10240*1024*1024
 http_file_share_expires_after = "90 days"
+
+-- Limits
+unsolicited_messages_per_minute = 100
+unsolicited_s2s_messages_per_minute = 100
 
 -- ======================
 -- VIRTUAL HOST
@@ -181,6 +186,7 @@ Component "conference.envs.net" "muc"
 	modules_enabled = {
 		"muc_mam";
 		"muc_moderation";
+		"muc_limits";
 --		"muc_offline_delivery";
 	}
 
@@ -195,6 +201,9 @@ Component "conference.envs.net" "muc"
 		members_only = false;
 		moderated = false;
 	}
+
+	muc_event_rate = 1.5
+	muc_burst_factor = 10
 
 -- ======================
 -- HTTP FILE UPLOAD COMPONENT
@@ -213,9 +222,23 @@ Component "upload.envs.net" "http_file_share"
 -- ======================
 
 Component "pubsub.envs.net" "pubsub"
-	admins = { "envs.net" }
-	pubsub_max_items = 1000
-	expose_publisher = true
+    parent_host = "envs.net"
+
+    admins = { "envs.net", "adminbot@envs.net", "creme@envs.net" }
+
+    pubsub_max_items = 1000
+    expose_publisher = true
+
+    add_permissions = {
+        ["prosody:admin"] = {
+            "pubsub:create-node";
+            "pubsub:service-admin";
+        };
+        ["prosody:operator"] = {
+            "pubsub:create-node";
+            "pubsub:service-admin";
+        };
+    }
 
 -- ======================
 -- SOCKS5 BYTESTREAMS PROXY (XEP-0065)

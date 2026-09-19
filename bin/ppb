@@ -1,0 +1,497 @@
+#!/bin/bash
+declare -a MENU_ITEMS=()
+declare NEW_FULLTEXT_REPLY=""
+declare NEW_SELECTED_ID=""
+
+PBCLI_BIN=$(command -v pbcli) || {
+  echo "pbcli not found in PATH. Please install pbcli and ensure it's in your PATH." >&2; exit 1;
+}
+export PBCLI_BIN
+
+# ---------------------------------
+# usage function for HELP display
+# ---------------------------------
+usage() {
+  cat <<EOF
+PBEasy - PrivateBin Terminal Helper Script
+
+Usage:
+  ppb [-i] | [ -u <FILE> | -c <URL> ] [-d] [-f <FORMAT> ] [-s <HOST URL>] [-n <name>] | [-h]
+
+Options:
+  -i            Create a default config file at
+                "\$XDG_CONFIG_HOME/pbeasy/config.sh" with default settings.
+                Edit this file to change defaults.
+  -u            Upload a paste from commandline as an Attachment. Images will
+                be shown. Plaintext, Markdown and Source Code must be piped in,
+                otherwise they'll be shown only as an attachement!
+                If no URL is provided, sends to your configured PrivateBin
+                instance.
+  -c            Comment or reply to a comment on a PrivateBin paste.
+                If a URL is provided, fetches comments and allows replying by
+                choosing a comment/reply from a list (with preview). The content
+                you reply to, is copied into your edit file in your \$EDITOR.
+                If no comment is selected, creates a new comment. It uses the
+                '--comment-as=name' from your "pbcli" config file by default as
+                your pseudonym. If not set, its anonymous.
+  -d            Enable discussion/comments for the paste, discussion is off
+                by default.
+  -s            Specify the PrivateBin server . Defaults to
+                "https://pb.envs.net/".
+  -f FORMAT     Specify the paste format (markdown, plaintext, syntax). Doesn't
+                use the format configured in your "pbcli" yet. The default is
+                'plaintext'.
+  -s            Specify host URL for uploads. Defaults to https://pb.envs.net/.
+  -n            Specify Name for the Paste, otherwise the actual date will be
+                used as name in the cache.
+  -h            Display this help.
+
+Features:
+  - Interactive Paste/Comment selection and preview using dialog.
+  - Replies to nested comments supported.
+  - Sends new pastes or comments, copying resulting URL to clipboard with xclip.
+  - Uses your \$EDITOR for editing comments and replies.
+
+Requirements:
+  - \$EDITOR must be set to your preferred text editor
+    (e.g., 'export EDITOR=nvim' in your shell config).
+  - Requires: pbcli, jq, dialog, xclip, fold, mktemp, diff, cat, tee.
+
+Examples:
+  ppb
+      Without arguments or piping go into interactive mode to browse stored URLs
+      to Open/Comment & Reply/Delete Pastes in the cache. Unfortunately there's
+      no easy way to determine if a Paste has expired, so you have to delete
+      them manually if they don't work anymore.
+
+  ppb -f markdown < file.md
+      Send file.md as a new PrivateBin paste in markdown format. The link will
+      automatically be added to your cache (and needs to be deleted later)
+
+  ppb -c "https://your.privatebin/paste#key"
+      Comment or reply to a comment on the given paste. The link to the Paste
+      will be automatically added to your cache.
+
+  cat political_statement.txt | ppb -d -f plaintext
+      Send a new paste with comments enabled in plaintext format with piping to
+      the script. Will be added to your cache.
+  
+  echo "My nice picture" | ppb -u image.png -n 'Nice Image'
+      Send image.png with a comment "My nice picture" as a new paste to your
+      configured PrivateBin instance. The comment will be attached to the paste.
+      The Paste will be added to your cache with the name "Nice Image". Name are
+      just short identifiers to better find them.
+
+EOF
+}
+
+# ---------------------------------
+# Normal send function
+# ---------------------------------
+send()
+{
+  if [[ -z "${SEND}" && -p /dev/stdin ]]; then
+      if [[ -n "${DISC}" ]]; then
+        /usr/bin/cat - | $PBCLI_BIN --comment -f "${FORMAT}" --discussion "${HOST}" | tee /dev/stderr | xclip -i
+      else
+        /usr/bin/cat - | $PBCLI_BIN --comment -f "${FORMAT}" "${HOST}" | tee /dev/stderr | xclip -i
+      fi
+  elif [[ -n "${SEND}" && -p /dev/stdin ]]; then
+      if [[ -n "${DISC}" ]]; then
+      /usr/bin/cat - | $PBCLI_BIN --comment --upload "${SEND}" -f "${FORMAT}" --discussion "${HOST}" | tee /dev/stderr | xclip -i
+      else
+      /usr/bin/cat - | $PBCLI_BIN --comment --upload "${SEND}" -f "${FORMAT}" "${HOST}" | tee /dev/stderr | xclip -i
+      fi
+  else
+      if [[ -n "${DISC}" ]];then
+      $PBCLI_BIN --comment --upload "${SEND}" -f "${FORMAT}" --discussion "${HOST}"| tee /dev/stderr | xclip -i
+      else
+      $PBCLI_BIN --comment --upload "${SEND}" -f "${FORMAT}" "${HOST}" | tee /dev/stderr | xclip -i
+      fi
+  fi
+  URL=$(xclip -o)
+  if [[ "${URL:0:8}" == "https://" ]]; then
+    save_cache "${URL}" "${CACHE_NAME}"
+  fi
+}
+
+# ---------------------------------
+# comment or reply to a comment
+# ---------------------------------
+comment()
+{
+  local EXIT_ON_CANCEL="${2:-1}"
+  local URL
+  MENU_ITEMS=()
+  NEW_FULLTEXT_REPLY=""
+  NEW_SELECTED_ID=""
+  echo "${1}"
+  if [[ "${1:0:8}" == "https://" ]];then
+    URL="${1}"
+    # Get JSON from PrivatePaste
+    JSON=$($PBCLI_BIN --comment --json "${URL}")
+    if [ -z "$JSON" ]; then
+      dialog --msgbox "Failed to retrieve data from PrivateBin." 7 50
+      return 0
+    fi
+    if ! (echo "$JSON" | jq 'has("paste")' | grep -q true); then
+      dialog --msgbox "This PrivateBin Paste has comments DISABLED!" 7 50
+      return 0
+    fi
+    # Create Array of Comments
+    COMMENTS_ARRAY=$(echo "$JSON" | jq '.comments')
+    
+    collect_menu_items_array "$COMMENTS_ARRAY" 0
+
+    # Save the current entry to the database
+    save_cache "${URL}" "${CACHE_NAME}"
+    
+    # Dynamically determine terminal size
+    HEIGHT=$(tput lines)
+    WIDTH=$(tput cols)
+    # Calculate dialog dimensions with padding
+    # For dialog --menu, the third argument is the number of menu rows, not the window height!
+    # Leave 3 lines at top and bottom, and account for dialog's own borders/buttons (about 7 lines)
+    MENU_ROWS=$((HEIGHT - 8 - 7))
+    [ $MENU_ROWS -lt 5 ] && MENU_ROWS=5
+    MENU_WIDTH=$((WIDTH - 16))     # 4 spaces at each side
+
+    while true; do
+        # Show menu, full width minus 8 (4 spaces each side), 3 lines padding top/bottom
+        selected_id=$(dialog \
+            --backtitle "Edit PrivateBin Comments in the terminal" \
+            --stdout \
+            --title "Reply to Comment on PrivateBin" \
+            --ok-label "Preview before Reply" \
+            --cancel-label "New comment" \
+            --extra-button --extra-label "Cancel" \
+            --menu "Choose a comment by id:" 0 $MENU_WIDTH $MENU_ROWS \
+            "${MENU_ITEMS[@]}")
+        status=$?
+        if [ $status -eq 3 ]; then
+            # Cancel pressed: clean up and exit or return
+            rm -f "$preview_file" 2>/dev/null
+            if [ "$EXIT_ON_CANCEL" -eq 1 ]; then
+              exit 0
+            else
+              return 0
+            fi
+        fi
+        if [ $status -ne 0 ]; then
+            break
+        fi
+
+        # Get full text of selected comment and write to temp file (with hard wrapping)
+        full_text=$(get_comment_by_id "$COMMENTS_ARRAY" "$selected_id" | jq -r '.comment')
+        preview_file=$(mktemp)
+        PREVIEW_HEIGHT=$((HEIGHT / 2))
+        PREVIEW_WIDTH=$((WIDTH / 2))
+        WRAP_WIDTH=$((PREVIEW_WIDTH - 4))
+        [ $WRAP_WIDTH -lt 20 ] && WRAP_WIDTH=20
+        echo "$full_text" | fold -s -w $WRAP_WIDTH > "$preview_file"
+
+        # Centered preview window, only vertical scrolling, "Edit" and "No" buttons below
+        PREVIEW_Y=$(( (HEIGHT - PREVIEW_HEIGHT) / 2 ))
+        PREVIEW_X=$(( (WIDTH - PREVIEW_WIDTH) / 2 ))
+
+        dialog --backtitle "Edit PrivateBin Comments in the terminal" \
+            --title "Comment Preview" \
+            --ok-label "Edit" \
+            --extra-button --extra-label "No" \
+            --begin $PREVIEW_Y $PREVIEW_X \
+            --textbox "$preview_file" $PREVIEW_HEIGHT $PREVIEW_WIDTH
+
+        preview_status=$?
+        rm -f "$preview_file"
+
+        # 0 = Edit (OK), 3 = No (extra button)
+        if [ $preview_status -eq 0 ]; then
+            NEW_FULLTEXT_REPLY="${full_text}"
+            NEW_SELECTED_ID="${selected_id}"
+            break
+        fi
+        # If "No" pressed, return to menu
+    done
+
+    # ---------------------------------
+    # If no Reply-To-Comment
+    # ---------------------------------
+    if [ -z "${NEW_FULLTEXT_REPLY}" ] || [ "${NEW_FULLTEXT_REPLY}" == "" ]; then
+      TMP=$(mktemp --suffix=.txt)
+      cp "${TMP}" "${TMP}.orig"
+      ${EDITOR} "${TMP}"
+      if diff "${TMP}" "${TMP}.orig";then
+        clear && printf '\e[3J'
+        dialog --msgbox "No comment entered. Aborting." 7 50
+        rm -f "${TMP}" "${TMP}.orig"
+        return 0
+      fi
+      if ! $PBCLI_BIN --comment -f "${FORMAT}" "${URL}" < "${TMP}";then
+        clear && printf '\e[3J'
+        dialog --msgbox "Failed to post comment." 7 50
+        rm -f "${TMP}" "${TMP}.orig"
+        return 0
+      fi
+      rm -f "${TMP}" "${TMP}.orig"
+      clear && printf '\e[3J'
+      dialog --msgbox "Comment posted on ${URL}!" 7 50
+      save_cache "${URL}" "${CACHE_NAME}"
+      return 0
+    else
+      TMP=$(mktemp --suffix=.txt)
+      REPLY=$(printf "%s" "${NEW_FULLTEXT_REPLY}" | sed -e 's/^/> /g')
+      printf "%s" "${REPLY}" > "${TMP}"
+      cp "${TMP}" "${TMP}.orig"
+      ${EDITOR} "${TMP}"
+      if diff "${TMP}" "${TMP}.orig";then
+        clear && printf '\e[3J'
+        dialog --msgbox "Comment didn't change. Aborting." 7 50
+        rm -f "${TMP}" "${TMP}.orig"
+        return 0
+      fi
+      if ! $PBCLI_BIN --comment -f "${FORMAT}" --comment-to "${NEW_SELECTED_ID}" "${URL}" < "${TMP}";then
+        clear && printf '\e[3J'
+        dialog --msgbox "Failed to post comment." 7 50
+        rm -f "${TMP}" "${TMP}.orig"
+        return 0
+      fi
+      rm -f "${TMP}" "${TMP}.orig"
+      clear
+      dialog --msgbox "Replied to post on ${URL}!" 7 50
+      save_cache "${URL}" "${CACHE_NAME}"
+      return 0
+    fi
+  else
+    dialog --msgbox "No valid URL provided. Aborting." 7 50
+    return 0
+  fi
+}
+
+# ---------------------------------
+# Delete entry from CACHE and update file
+# ---------------------------------
+delete_entry_from_cache()
+{
+    local url_to_delete="$1"
+    # Remove the line with the given URL from CACHE
+    CACHE=$(printf "%s\n" "$CACHE" | awk -F'\t' -v url="$url_to_delete" '$1 != url')
+    # Save updated CACHE
+    printf "%s\n" "${CACHE}" | gpg --quiet --passphrase "${CACHE_PASS}" --batch --yes --symmetric -o "${XDG_DATA_HOME:-$HOME/.local/share}/pbeasy/linkcache.gpg"
+}
+
+# ---------------------------------
+# Save CACHE to encrypted file
+# ---------------------------------
+save_cache()
+{
+  if [[ "${CACHE}" = *${1}* ]]; then
+    return
+  fi
+  URL=$(printf "%s" "${1}" | tr -d "\r")
+  NAME=$(printf "%s" "${2}" | tr -d "\r")
+# Ensure CACHE ends with a newline before appending
+if [[ -n "$CACHE" && "${CACHE: -1}" != $'\n' ]]; then
+  CACHE="${CACHE}"$'\n'
+fi
+CACHE="${CACHE}${URL}"$'\t'"${NAME}"
+  printf "%s\n" "${CACHE}" | gpg --quiet --passphrase "${CACHE_PASS}" --batch --yes --symmetric -o "${XDG_DATA_HOME:-$HOME/.local/share}/pbeasy/linkcache.gpg"
+}
+
+# ---------------------------------
+# Get the comment to reply to
+# ---------------------------------
+get_comment_by_id()
+{
+  local array_json="$1"
+  local search_id="$2"
+  local length i
+  length=$(echo "$array_json" | jq 'length')
+  for ((i=0; i<length; i++)); do
+    local item_json id
+    item_json=$(echo "$array_json" | jq -c ".[$i]")
+    id=$(echo "$item_json" | jq -r '.id')
+    if [[ "$id" == "$search_id" ]]; then
+      echo "$item_json"
+      return 0
+    fi
+    local replies
+    replies=$(echo "$item_json" | jq -c '.replies')
+    if [ "$(echo "$replies" | jq 'length')" -gt 0 ]; then
+      get_comment_by_id "$replies" "$search_id" && return 0
+    fi
+  done
+  return 1
+}
+
+# ---------------------------------
+# Recursive function to collect menu items from comments array
+# ---------------------------------
+collect_menu_items_array()
+{
+  local array_json="$1"
+  local depth="$2"
+  local length i
+  length=$(echo "$array_json" | jq 'length')
+  for ((i=0; i<length; i++)); do
+    local item_json id text replies indent
+    item_json=$(echo "$array_json" | jq -c ".[$i]")
+    id=$(echo "$item_json" | jq -r '.id')
+    text=$(echo "$item_json" | jq -r '.comment' | tr "\n" " " | tr -d "\r")
+    nick=$(echo "$item_json" | jq -r '.nickname' | tr -d "\r")
+    indent=$(printf '%*s' "$depth" '' | tr " " "-")
+    if [[ -n "$id" && -n "$text" && -n "${text// }" ]]; then
+        indent="${indent} "
+        MENU_ITEMS+=("$id" "${nick%%*( )}: ${indent}${text}")
+    fi
+    replies=$(echo "$item_json" | jq -c '.replies')
+    if [ "$(echo "$replies" | jq 'length')" -gt 0 ]; then
+      collect_menu_items_array "$replies" $((depth + 1))
+    fi
+  done
+}
+
+# ---------------------------------
+# Create Config file
+# ---------------------------------
+create_config()
+{
+  CONFIG_PATH="${XDG_CONFIG_HOME:-$HOME/.config}/pbeasy/"
+  CONFIG_FILE="config.sh"
+  mkdir -p $CONFIG_PATH
+  cat <<EOF > "${CONFIG_PATH}${CONFIG_FILE}"
+# Configuration file for pbeasy (ppb, PrivatePasteBin)
+# All other configuration options (like --comment-as=<name>) are still read
+# from your "pbcli" config file, so you can set your pseudonym there for
+# example.
+
+HOST="https://pb.envs.net/"   # Default Server to use.
+FORMAT="plaintext"            # Default forat for piping
+                              # ("plaintext", "syntax", "markdown")
+DISCUSSION=1                  # Turn on discussion by default (set to 0 for off)
+
+# You can add a function to evaluate the password for example with the
+# "pass" password-store: CACHE_PASS="\$(pass show privatebin/pbeasy)"
+CACHE_PASS="Passw0d123"       # MUST NOT BE EMPTY
+EOF
+}
+
+# ---------------------------------
+# Show cached PrivateBin Links
+# ---------------------------------
+show_cache()
+{
+    HEIGHT=$(tput lines)
+    WIDTH=$(tput cols)
+    MENU_ROWS=$((HEIGHT - 8 - 7))
+    [ $MENU_ROWS -lt 5 ] && MENU_ROWS=5
+    MENU_WIDTH=$((WIDTH - 16))
+
+    ENTRIES=()
+    while IFS=$'\t' read -r url name; do
+        [ -z "$url" ] && continue
+        ENTRIES+=("$url" "$(printf '%-18.18s' "$name")")
+    done <<< "$CACHE"
+
+    while true; do
+        selected_url=$(dialog \
+            --backtitle "Choose PrivateBin Entry to show, comment or delete." \
+            --stdout \
+            --title "Choose Entry" \
+            --ok-label "Select" \
+            --cancel-label "Quit" \
+            --menu "Choose a PrivateBin entry:" 0 $MENU_WIDTH $MENU_ROWS \
+            "${ENTRIES[@]}")
+        status=$?
+        if [ $status -ne 0 ]; then
+            break
+        fi
+
+        action=$(dialog --stdout --menu "Choose an action for PrivateBin entry:" 12 50 3 \
+            "Open" "Open PrivateBin Entry with xdg-open" \
+            "Comment" "Comment PrivateBin Entry if enabled" \
+            "Delete" "Delete PrivateBin Entry (must be done manually)")
+        if [ $? -ne 0 ]; then
+            continue
+        fi
+        case "$action" in
+            Open)
+                xdg-open "${selected_url}"
+                ;;
+            Comment)
+                NEW_FULLTEXT_REPLY=""
+                NEW_SELECTED_ID=""
+                comment "${selected_url}" 0
+                ;;
+            Delete)
+                delete_entry_from_cache "${selected_url}"
+                # Refresh ENTRIES after deletion
+                ENTRIES=()
+                while IFS=$'\t' read -r url name; do
+                    [ -z "$url" ] && continue
+                    ENTRIES+=("$url" "$(printf '%-18.18s' "$name")")
+                done <<< "$CACHE"
+                ;;
+        esac
+    done
+}
+
+# ---------------------------------
+# MAIN FUNCTION
+# ---------------------------------
+FORMAT="plaintext"
+HOST="https://pb.envs.net/"
+DISCUSSION=1
+CACHE_PASS="Passw0rd123"
+if [ -f "${XDG_CONFIG_HOME:-$HOME/.config}/pbeasy/config.sh" ]; then
+  source "${XDG_CONFIG_HOME:-$HOME/.config}/pbeasy/config.sh"
+fi
+if [ ! -f "${XDG_DATA_HOME:-$HOME/.local/share}/pbeasy/linkcache.gpg" ]; then
+  mkdir -p "${XDG_DATA_HOME:-$HOME/.local/share}/pbeasy/"
+  printf "" | gpg --quiet --passphrase "${CACHE_PASS}" --batch --yes --symmetric -o "${XDG_DATA_HOME:-$HOME/.local/share}/pbeasy/linkcache.gpg"
+fi
+if [[ -f "${XDG_DATA_HOME:-$HOME/.local/share}/pbeasy/linkcache.gpg" ]]; then
+  CACHE=$(cat "${XDG_DATA_HOME:-$HOME/.local/share}/pbeasy/linkcache.gpg" | gpg --quiet --passphrase "${CACHE_PASS}" --batch --yes --decrypt)
+else
+  CACHE=""
+fi
+export FORMAT HOST CACHE
+if [ ${DISCUSSION} -eq 1 ]; then
+  DISC="-d"
+else
+  unset DISC
+fi
+CACHE_NAME=$(date "+%Y-%m-%d %H:%M")
+export CACHE_NAME
+unset COMMENT
+unset SEND
+
+while getopts "ic:dn:u:s:f:h" option; do
+  case $option in
+    c) COMMENT="${OPTARG}" ;;
+    d) DISC="-d" ;;
+    f) FORMAT="${OPTARG}";export FORMAT ;;
+    i) create_config;tput reset;exit 0 ;;
+    n) CACHE_NAME="${OPTARG}";export CACHE_NAME ;;
+    s) HOST="${OPTARG}";export HOST ;;
+    u) SEND="${OPTARG}" ;;
+    h) usage;exit 0 ;;
+    *) usage;exit 0 ;;
+  esac
+done
+shift $((OPTIND - 1))
+if [ $# -eq 0 ] && [ ! -p /dev/stdin ] && [ "${CACHE}" != "" ] && [ -z "${SEND}" ] && [ -z "${COMMENT}" ]; then
+  show_cache
+  exit 0
+fi
+if [ -n "${SEND}" ] && [ -n "${COMMENT}" ]; then
+  printf "Cannot use -c and -u options together. Aborting.\n"
+  usage
+  exit 1
+fi
+if [[ -n "${COMMENT}" ]];then
+  comment "${COMMENT}" 1
+  exit 0;
+else
+  export SEND
+  send
+fi

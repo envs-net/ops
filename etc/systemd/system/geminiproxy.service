@@ -1,16 +1,48 @@
 [Unit]
-Description=geminiproxy.service kineto
-After=network-online.target nginx.service
+Description=kineto HTTP-to-Gemini gateway
+Wants=network-online.target
+After=network-online.target
+StartLimitIntervalSec=60s
+StartLimitBurst=3
 
 [Service]
 Type=simple
-WorkingDirectory=/srv/kineto
-ExecStart=/srv/kineto/kineto -b 127.0.0.1:8994 gemini://envs.net
 User=services
-Restart=always
-RestartSec=5
-StartLimitInterval=60s
-StartLimitBurst=3
+WorkingDirectory=/srv/kineto
+
+ExecStart=/srv/kineto/kineto \
+    -P \
+    -b 127.0.0.1:8994 \
+    gemini://envs.net
+
+Restart=on-failure
+RestartSec=5s
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+ProcSubset=pid
+RemoveIPC=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+MemoryDenyWriteExecute=true
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+UMask=0077
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target
