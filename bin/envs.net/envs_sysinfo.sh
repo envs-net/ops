@@ -212,7 +212,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "ntfy": {
         "desc":        "a simple HTTP-based pub-sub notification service",
-        "version":     "$(dpkg -s ntfy | awk '/Version:/ {print $2}')",
+        "version":     "$(dpkg -s ntfy | awk '/Version:/ {print $2}' | head -n1)",
         "url":         "https://ntfy.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
@@ -236,7 +236,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "prosody": {
         "desc":        "lightweight jabber/xmpp server",
-        "version":     "$(dpkg -s prosody | awk '/Version:/ {print $2}')",
+        "version":     "$(dpkg -s prosody | awk '/Version:/ {print $2}' | head -n1)",
         "url":         "https://xmpp.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
