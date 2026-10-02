@@ -29,7 +29,6 @@ MODULES=(
     mod_muc_rtbl
     mod_muc_limits
     mod_muc_offline_delivery
-    mod_s2s_bidi
     mod_s2s_keepalive
     mod_sasl2
     mod_sasl2_bind2
