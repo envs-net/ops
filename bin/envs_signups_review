@@ -14,8 +14,9 @@ fail() {
     exit 1
 }
 
-if [[ ${EUID} -ne 0 ]]; then
-    exec sudo -- "$0" "$@"
+if (( EUID != 0 )); then
+    printf 'Please run as root!\n' >&2
+    exit 1
 fi
 
 for command in jq ssh-keygen sudo logger; do

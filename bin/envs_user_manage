@@ -17,20 +17,36 @@ no_user_update="$5"
 newpw=$(pwgen -s 12 1)
 pwcrypt=$(perl -e "print crypt('${newpw}', 'sa');")
 
-# default mail header
-head_mime='MIME-Version: 1.0'
-head_type='Content-type: text/plain; charset=utf-8'
-head_def="$head_mime\r\n$head_type"
+send_text_mail() {
+	local from="$1"
+	local to="$2"
+	local cc="$3"
+	local subject="$4"
+
+	{
+		printf 'MIME-Version: 1.0\r\n'
+		printf 'Content-Type: text/plain; charset=UTF-8\r\n'
+		printf 'Content-Transfer-Encoding: 8bit\r\n'
+		printf 'From: %s\r\n' "$from"
+		printf 'To: %s\r\n' "$to"
+		[ -n "$cc" ] && printf 'Cc: %s\r\n' "$cc"
+		printf 'Subject: %s\r\n' "$subject"
+		printf '\r\n'
+		cat
+	} | sendmail -oi -t
+}
 
 ###
 
 send_db_mail() {
 	db_type="$1"
-	db_sub="Subject: envs - $db_type database readme"
-	db_mail="$head_def\r\nTo: $user@$domain\r\nFrom: sudoers@$domain\r\n$db_sub"
 
-	echo -e "$db_mail\r\n$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/g -e s/_sql_/"$db_type"/g /usr/local/bin/envs.net/database-email.tmpl)" \
-		| sendmail "$user"@"$domain"
+	sed -e s/_username_/"$user"/g \
+		-e s/_password_/"$newpw"/g \
+		-e s/_sql_/"$db_type"/g \
+		/usr/local/bin/envs.net/database-email.tmpl \
+		| send_text_mail "sudoers@$domain" "$user@$domain" "" \
+			"envs - $db_type database readme"
 }
 
 
@@ -109,25 +125,25 @@ add_user() {
 	sleep 3
 
 	# send readme mail
-	readme_sub="Subject: Welcome $user | please readme!"
-	readme_mail="$head_def\r\nTo: $mailTo\r\nCC: $user@$domain\r\nFrom: sudoers@$domain\r\n$readme_sub"
-
-	echo -e "$readme_mail\r\n$(cat /usr/local/bin/envs.net/welcome-readme.tmpl)" | sendmail "$user"@"$domain" "$mailTo"
+	cat /usr/local/bin/envs.net/welcome-readme.tmpl \
+		| send_text_mail "sudoers@$domain" "$mailTo" "$user@$domain" \
+			"Welcome $user | please readme!"
 
 	sleep 1
 
 	# send welcome mail
-	wel_sub="Subject: Welcome to $domain | $user"
-	wel_mail="$head_def\r\nTo: $mailTo\r\nCC: $user@$domain\r\nFrom: hosting@$domain\r\n$wel_sub"
-
-	echo -e "$wel_mail\r\n$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /usr/local/bin/envs.net/welcome-email.tmpl)" \
-		| sendmail "$user"@"$domain" "$mailTo"
+	sed -e s/_username_/"$user"/g \
+		-e s/_password_/"$newpw"/g \
+		/usr/local/bin/envs.net/welcome-email.tmpl \
+		| send_text_mail "hosting@$domain" "$mailTo" "$user@$domain" \
+			"Welcome to $domain | $user"
 
 	sleep 1
 
 	# subscribing to mailing list
-	echo -e "$head_def\r\nTo: team-join@$domain\r\nFrom: $user@$domain\r\nSubject: subscribe\r\n" \
-		| sudo -u "$user" sendmail team-join@"$domain"
+	printf 'MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nTo: team-join@%s\r\nFrom: %s@%s\r\nSubject: subscribe\r\n\r\n' \
+		"$domain" "$user" "$domain" \
+		| sudo -u "$user" sendmail -oi -t
 
 	# setup mutt
 	echo -e "$(sed -e s/_username_/"$user"/g -e s/_password_/"$newpw"/ /home/"$user"/.muttrc)" > /home/"$user"/.muttrc
@@ -159,7 +175,9 @@ add_user() {
 del_user() {
 	# unsubscribe mailing list
 	# ??
-	echo -e "$head_def\r\nTo: team-leave@$domain\r\nFrom: $user@$domain\r\nSubject: leave\r\n" | sudo -u "$user" sendmail team-leave@"$domain"
+	printf 'MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nTo: team-leave@%s\r\nFrom: %s@%s\r\nSubject: leave\r\n\r\n' \
+		"$domain" "$user" "$domain" \
+		| sudo -u "$user" sendmail -oi -t
 
 	# stop user stuff
 	pkill -KILL -u "$user"
@@ -252,3 +270,4 @@ esac
 
 #
 exit 0
+
