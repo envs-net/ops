@@ -8,7 +8,16 @@ WWW_PATH='/var/www/envs.net'
 JSON_FILE="$WWW_PATH/sysinfo.json"
 TMP_JSON='/tmp/sysinfo.json_tmp'
 
-[ "$(id -u)" -ne 0 ] && printf 'Please run as root!\n' && exit 1
+if (( EUID != 0 )); then
+  printf 'Please run as root!\n' >&2
+  exit 1
+fi
+
+SYSINFO_KEYS=(os uptime uname board cpuinfo cpucount)
+# Keep external lookups bounded. One unavailable service should not make the
+# whole daily job wait indefinitely.
+CURL_OPTS=(-fsS --connect-timeout 3 --max-time 8)
+SSH_OPTS=(-o BatchMode=yes -o ConnectTimeout=5 -o ConnectionAttempts=1)
 
 ###
 
@@ -50,10 +59,19 @@ service_pkgs=(mariadb-server nginx openssh-server)
 FULL_PKG_LIST=("${service_pkgs[@]}" "${shells[@]}" "${editors[@]}" "${inet_clients[@]}" "${coding_pkg[@]}" "${coding_tools[@]}" "${misc[@]}")
 
 
+declare -A PKG_DESC_CACHE=()
+declare -A DPKG_VERSION=()
+
+auto_pkg_desc() {
+  local pkg="$1"
+  printf '%s' "${PKG_DESC_CACHE[$pkg]-}"
+}
+
 get_pkg_desc() {
   local pkg="$1"
-  [ -z "$pkg_desc" ] && pkg_desc="$(apt-cache show "$pkg" | awk '/Description-en/ {print substr($0, index($0,$2))}' | head -1)"
-  [ -z "$pkg_desc" ] && pkg_desc="$(apt-cache search ^"$pkg"$ | awk '{print substr($0, index($0,$3))}' | head -1)"
+  [ -z "${pkg_desc:-}" ] && pkg_desc="$(auto_pkg_desc "$pkg")"
+  # Rare fallback for virtual/renamed packages not returned by apt-cache show.
+  [ -z "$pkg_desc" ] && pkg_desc="$(apt-cache search ^"$pkg"$ 2>/dev/null | awk 'NR==1 {print substr($0, index($0,$3))}')"
   [ -z "$pkg_desc" ] && pkg_desc='n.a.'
 }
 
@@ -83,20 +101,85 @@ custom_pkg_desc() {
   esac
 }
 
+# Load package descriptions once instead of spawning apt-cache for every table row.
+APT_PKGS=()
+for pkg in "${FULL_PKG_LIST[@]}"; do
+  pkg_desc=''
+  _no_custom_pkg='0'
+  custom_pkg_desc "$pkg"
+  [ -z "$pkg_desc" ] && APT_PKGS+=("$pkg")
+done
+
+if ((${#APT_PKGS[@]})); then
+  while IFS=$'\t' read -r pkg desc; do
+    [ -n "$pkg" ] && [ -z "${PKG_DESC_CACHE[$pkg]-}" ] && PKG_DESC_CACHE["$pkg"]="$desc"
+  done < <(
+    apt-cache show "${APT_PKGS[@]}" 2>/dev/null |
+      awk '
+        /^Package: / { pkg=$2 }
+        /^(Description|Description-en): / && !seen[pkg] {
+          line=$0
+          sub(/^[^:]+:[[:space:]]*/, "", line)
+          print pkg "\t" line
+          seen[pkg]=1
+        }
+      '
+  )
+fi
+
+# Load all dpkg versions in one process. Missing packages intentionally remain
+# empty, matching the old per-package dpkg-query behaviour.
+while IFS=$'\t' read -r pkg version; do
+  [ -n "$pkg" ] && DPKG_VERSION["$pkg"]="$version"
+done < <(dpkg-query -W -f='${Package}\t${Version}\n' "${FULL_PKG_LIST[@]}" 2>/dev/null || true)
+
+# Collect all six values over a single SSH connection per remote host.
+declare -A SYS_SRV=() SYS_CORE=() SYS_EXT=()
+
+collect_local_sysinfo() {
+  local key
+  for key in "${SYSINFO_KEYS[@]}"; do
+    SYS_CORE["$key"]="$(/opt/sysinfo.sh get "$key" 2>/dev/null || true)"
+  done
+}
+
+collect_remote_sysinfo() {
+  local host="$1"
+  local map_name="$2"
+  local key value
+  local -n out="$map_name"
+
+  while IFS=$'\t' read -r key value; do
+    [ -n "$key" ] && out["$key"]="$value"
+  done < <(
+    ssh "${SSH_OPTS[@]}" "$host"       'for k in os uptime uname board cpuinfo cpucount; do v=$(/opt/sysinfo.sh get "$k" 2>/dev/null || true); printf "%s\t%s\n" "$k" "$v"; done'       2>/dev/null || true
+  )
+
+  for key in "${SYSINFO_KEYS[@]}"; do
+    : "${out[$key]:=}"
+  done
+}
+
+collect_remote_sysinfo "srv.$DOMAIN" SYS_SRV
+collect_local_sysinfo
+collect_remote_sysinfo "ext.$DOMAIN" SYS_EXT
+
 
 #
 # SYSINFO.JSON
 #
 print_pkg_version() {
+  local pkg
   local pkg_version
   overwrite_pkgs=('crystal')
 
-  #for pkg in $(dpkg-query -f '${binary:Package}\n' -W); do
   for pkg in "${FULL_PKG_LIST[@]}"; do
-    _no_custom_pkg='0' ; custom_pkg_desc "$pkg"
+    pkg_desc=''
+    _no_custom_pkg='0'
+    custom_pkg_desc "$pkg"
     for o_pkg in "${overwrite_pkgs[@]}"; do
       if [ "$_no_custom_pkg" -eq '1' ] || [ "$pkg" = "$o_pkg" ]; then
-        pkg_version="$(dpkg-query -f '${Version}\n' -W "$pkg")"
+        pkg_version="${DPKG_VERSION[$pkg]-}"
         printf '      "%s": "%s",\n' "$pkg" "$pkg_version"
       fi
     done
@@ -129,30 +212,30 @@ cat<<EOM > "$TMP_JSON"
     "system": {
       "srv.$DOMAIN": {
         "location":     "Hetzner (Helsinki)",
-        "os":           "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get os')",
-        "uptime":       "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get uptime')",
-        "uname":        "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get uname')",
-        "board":        "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get board')",
-        "cpuinfo":      "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get cpuinfo')",
-        "cpucount":     "$(ssh srv.$DOMAIN '/opt/sysinfo.sh get cpucount')"
+        "os":           "${SYS_SRV[os]}",
+        "uptime":       "${SYS_SRV[uptime]}",
+        "uname":        "${SYS_SRV[uname]}",
+        "board":        "${SYS_SRV[board]}",
+        "cpuinfo":      "${SYS_SRV[cpuinfo]}",
+        "cpucount":     "${SYS_SRV[cpucount]}"
       },
       "core.$DOMAIN": {
         "location":     "VM on srv.envs.net",
-        "os":           "$(/opt/sysinfo.sh get os)",
-        "uptime":       "$(/opt/sysinfo.sh get uptime)",
-        "uname":        "$(/opt/sysinfo.sh get uname)",
-        "board":        "$(/opt/sysinfo.sh get board)",
-        "cpuinfo":      "$(/opt/sysinfo.sh get cpuinfo)",
-        "cpucount":     "$(/opt/sysinfo.sh get cpucount)"
+        "os":           "${SYS_CORE[os]}",
+        "uptime":       "${SYS_CORE[uptime]}",
+        "uname":        "${SYS_CORE[uname]}",
+        "board":        "${SYS_CORE[board]}",
+        "cpuinfo":      "${SYS_CORE[cpuinfo]}",
+        "cpucount":     "${SYS_CORE[cpucount]}"
       },
       "ext.$DOMAIN": {
         "location":     "netcup (Nürnberg)",
-        "os":           "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get os')",
-        "uptime":       "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get uptime')",
-        "uname":        "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get uname')",
-        "board":        "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get board')",
-        "cpuinfo":      "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get cpuinfo')",
-        "cpucount":     "$(ssh ext.$DOMAIN '/opt/sysinfo.sh get cpucount')"
+        "os":           "${SYS_EXT[os]}",
+        "uptime":       "${SYS_EXT[uptime]}",
+        "uname":        "${SYS_EXT[uname]}",
+        "board":        "${SYS_EXT[board]}",
+        "cpuinfo":      "${SYS_EXT[cpuinfo]}",
+        "cpucount":     "${SYS_EXT[cpucount]}"
       }
     },
     "services": {
@@ -164,7 +247,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "cryptpad": {
         "desc":        "collaborative real time editing",
-        "version":     "$(curl -fs https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
+        "version":     "$(curl "${CURL_OPTS[@]}" https://pad."$DOMAIN"/api/config | awk -F= '/ver=/ {print $2}' | sed '$ s/"$//')",
         "url":         "https://pad.$DOMAIN/",
         "server":      "srv.$DOMAIN"
       },
@@ -176,19 +259,19 @@ cat<<EOM > "$TMP_JSON"
       },
       "drone": {
         "desc":        "continuous delivery platform",
-        "version":     "$(curl -fs https://drone."$DOMAIN"/version | jq -Mr .version)",
+        "version":     "$(curl "${CURL_OPTS[@]}" https://drone."$DOMAIN"/version | jq -Mr .version)",
         "url":         "https://drone.$DOMAIN/",
         "server":      "srv.$DOMAIN"
       },
       "getwtxt": {
         "desc":        "twtxt registry service - microblogging for hackers",
-        "version":     "$(curl -fs https://twtxt."$DOMAIN"/api/plain/version | awk '{print $2}')",
+        "version":     "$(curl "${CURL_OPTS[@]}" https://twtxt."$DOMAIN"/api/plain/version | awk '{print $2}')",
         "url":         "https://twtxt.$DOMAIN/",
         "server":      "core.$DOMAIN"
       },
       "gitea": {
         "desc":        "painless self-hosted git service",
-        "version":     "$(curl -fs https://git."$DOMAIN"/api/v1/version | jq -Mr .version)",
+        "version":     "$(curl "${CURL_OPTS[@]}" https://git."$DOMAIN"/api/v1/version | jq -Mr .version)",
         "url":         "https://git.$DOMAIN/",
         "server":      "srv.$DOMAIN"
       },
@@ -200,7 +283,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "hedgedoc": {
         "desc":        "collaborative real time markdown",
-        "version":     "$(curl -Is https://hedgedoc."$DOMAIN"/ | awk '/^hedgedoc-version:/{print $2}'| tr -d "\015")",
+        "version":     "$(curl "${CURL_OPTS[@]}" -I https://hedgedoc."$DOMAIN"/ | awk '/^hedgedoc-version:/{print $2}'| tr -d "\015")",
         "url":         "https://hedgedoc.$DOMAIN/",
         "server":      "srv.$DOMAIN"
       },
@@ -224,7 +307,7 @@ cat<<EOM > "$TMP_JSON"
       },
       "pleroma": {
         "desc":        "federated social network - microblogging",
-        "version":     "$(curl -fs https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
+        "version":     "$(curl "${CURL_OPTS[@]}" https://pleroma."$DOMAIN"/api/v1/instance | jq -Mr .version | awk '{print $4}' | sed '$ s/)//')",
         "url":         "https://pleroma.$DOMAIN/",
         "server":      "ext.$DOMAIN"
       },
@@ -242,13 +325,13 @@ cat<<EOM > "$TMP_JSON"
       },
       "searxng": {
         "desc":        "privacy-respecting metasearch engine",
-        "version":     "$(curl -fs https://searx."$DOMAIN"/config | jq -Mr .version)",
+        "version":     "$(curl "${CURL_OPTS[@]}" https://searx."$DOMAIN"/config | jq -Mr .version)",
         "url":         "https://searx.$DOMAIN/",
         "server":      "srv.$DOMAIN"
       },
       "libretranslate": {
         "desc":        "free and open source machine translation api",
-        "version":     "$(curl -fs https://translate."$DOMAIN"/spec | jq -r '.info.version')",
+        "version":     "$(curl "${CURL_OPTS[@]}" https://translate."$DOMAIN"/spec | jq -r '.info.version')",
         "url":         "https://translate.$DOMAIN/",
         "server":      "srv.$DOMAIN"
       },
@@ -293,6 +376,22 @@ EOM
 mv "$TMP_JSON" "$JSON_FILE"
 chown services:envs "$JSON_FILE"
 
+# Parse the generated JSON once. The old script spawned jq repeatedly for every
+# package/service while building the HTML table.
+declare -A JSON_PKG_VERSION=()
+declare -A SERVICE_DESC=() SERVICE_VERSION=() SERVICE_URL=() SERVICE_SERVER=()
+
+while IFS=$'\t' read -r pkg version; do
+  JSON_PKG_VERSION["$pkg"]="$version"
+done < <(jq -r '.data.packages | to_entries[] | [.key, (.value // "")] | @tsv' "$JSON_FILE")
+
+while IFS=$'\t' read -r service desc version url server; do
+  SERVICE_DESC["$service"]="$desc"
+  SERVICE_VERSION["$service"]="$version"
+  SERVICE_URL["$service"]="$url"
+  SERVICE_SERVER["$service"]="$server"
+done < <(jq -r '.data.services | to_entries[] | [.key, (.value.desc // ""), (.value.version // ""), (.value.url // ""), (.value.server // "")] | @tsv' "$JSON_FILE")
+
 
 #
 # SYSINFO.PHP
@@ -300,16 +399,16 @@ chown services:envs "$JSON_FILE"
 print_pkg_info() {
   local pkg="$1"
 
-  local pkg_version
-  pkg_version="$(jq -Mr '.data.packages."'"$pkg"'"|select (.!=null)' "$JSON_FILE")"
+  local pkg_version="${JSON_PKG_VERSION[$pkg]-}"
   [ -z "$pkg_version" ] && pkg_version='n.a.'
 
-  local pkg_desc
+  local pkg_desc=''
+  _no_custom_pkg='0'
   custom_pkg_desc "$pkg"
   get_pkg_desc "$pkg"
   # remove description-en string
   pkg_desc="${pkg_desc//Description-en: /}"
-  # replace double qoutes with single qoute
+  # replace double quotes with single quote
   pkg_desc="${pkg_desc//\"/\'}"
   # string to lowercase
   pkg_desc="${pkg_desc,,}"
@@ -319,17 +418,8 @@ print_pkg_info() {
 
 print_pkg_info_services() {
   local pkg="$1"
-
-  local pkg_desc
-  pkg_desc="$(jq -Mr '.data.services."'"$pkg"'".desc|select (.!=null)' "$JSON_FILE")"
-
-  local pkg_version
-  pkg_version="$(jq -Mr '.data.services."'"$pkg"'".version|select (.!=null)' "$JSON_FILE")"
-
-  local s_url
-  s_url="$(jq -Mr '.data.services."'"$pkg"'".url|select (.!=null)' "$JSON_FILE")"
-
-  printf '\t\t<tr> <td><a href="%s" target="_blank">%s</a></td> <td>%s</td> <td>%s</td> </tr>\n' "$s_url" "$pkg" "$pkg_version" "$pkg_desc"
+  printf '\t\t<tr> <td><a href="%s" target="_blank">%s</a></td> <td>%s</td> <td>%s</td> </tr>\n' \
+    "${SERVICE_URL[$pkg]-}" "$pkg" "${SERVICE_VERSION[$pkg]-}" "${SERVICE_DESC[$pkg]-}"
 }
 
 print_category() {
@@ -348,9 +438,7 @@ print_category() {
 
   if [ "$category" = 'services' ]; then
     for pkg in "${arr[@]}"; do
-      # check service in sysinfo.json
-      s_in_j="$(jq -Mr '.data.services."'"$pkg"'"|select (.!=null)' "$JSON_FILE")"
-      if [ -n "$s_in_j" ]; then
+      if [[ -v SERVICE_DESC[$pkg] ]]; then
         print_pkg_info_services "$pkg"
       else
         print_pkg_info "$pkg"
@@ -367,16 +455,11 @@ print_srv_services() {
   local srv="${1}.envs.net"
   shift
   local arr=("$@")
+  local service
 
   for service in "${arr[@]}"; do
-    local srv_service
-    srv_service="$(jq -Mr '.data.services."'"$service"'".server|select (.!=null)' "$JSON_FILE")"
-
-    local s_url
-    s_url="$(jq -Mr '.data.services."'"$service"'".url|select (.!=null)' "$JSON_FILE")"
-
-    if [ "$srv_service" = "$srv" ]; then
-      printf '<a href="%s" target="_blank">%s</a> ' "$s_url" "$service"
+    if [ "${SERVICE_SERVER[$service]-}" = "$srv" ]; then
+      printf '<a href="%s" target="_blank">%s</a> ' "${SERVICE_URL[$service]-}" "$service"
     fi
   done
 }
