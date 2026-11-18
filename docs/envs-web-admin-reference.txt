@@ -1,0 +1,381 @@
+ENVS-WEB(7)                  envs.net Administrator-Handbuch             2026-11-01
+
+NAME
+    envs-web - PHP-FPM-/CGI-Isolation, Verwaltung, Auto-Provisionierung
+
+GELTUNGSBEREICH
+    Diese Referenz beschreibt die zwei aktuell produktiven Web-Werkzeuge:
+
+      /usr/local/sbin/envs_php_fpm_manage      Version 20.4.2
+      /usr/local/sbin/envs_web_autoprovision   Version 1.2.2
+
+    Befehle und Argumente wurden anhand der jeweiligen Python-Quelltexte
+    überprüft. Frühere Migrationsprogramme (batch_migrate, batch_prepare,
+    canary, entrypoint_audit) wurden archiviert und sind keine laufenden
+    Administrationsbefehle mehr. Sonstige envs.net-Verwaltungswerkzeuge
+    (z. B. Signup-/User-Verwaltung) gehören nicht zu dieser Referenz.
+
+BESCHREIBUNG
+    Statische Webseiten werden direkt von nginx ausgeliefert. Bei Bedarf
+    werden PHP- und CGI-Dienste pro Shell-Benutzer mit dessen UID betrieben.
+    Die Standardrouten sind username.envs.net, envs.net/~username und
+    envs.net/u/username. PHP- und CGI-Anfragen ohne private Backend-Route
+    werden dort durch Fail-Closed-Guards zurückgewiesen (HTTP 403); sie
+    werden nicht an die gemeinsamen www-data-Fallbacks durchgereicht.
+
+    Der Auto-Provisioner erkennt Bedarf anhand der Benutzerdateien,
+    prüft Voraussetzungen, richtet Dienste ein und veröffentlicht neue
+    PHP-/CGI-Routen gesammelt (normalerweise ein Reload pro geändertem
+    Batch; bei einem Recovery-Versuch ggf. ein weiterer).
+    Benutzerdateien werden dabei nicht mit chmod/chown verändert.
+    Individuelle Custom-VHosts sind gesondert zu prüfen.
+    Die produktive PHP-FPM-Manager-Vorlage trägt keinen v18-DRAFT-Header
+    mehr; historische Offline-Review-Vorlagen können ihn weiter enthalten.
+
+------------------------------------------------------------------------
+
+ENVS_WEB_AUTOPROVISION(8)               AUTOMATIK, Version 1.2.2
+
+AUFRUF
+    envs_web_autoprovision [--user USER] [--max-accounts N]
+    envs_web_autoprovision --apply [--user USER] [--max-accounts N]
+    envs_web_autoprovision --help
+
+OPTIONEN
+    (ohne --apply)
+        Nur Vorschau (Standard). Erkennt vorhandene PHP-/CGI-Anforderungen,
+        prüft bestehende Routen/Dienste und gibt JSONL aus. Keine Aktivierung.
+
+    --apply
+        Abgleich anwenden: fehlende private PHP-/CGI-Dienste und Routen
+        einrichten, soweit Voraussetzungen erfüllt sind. Bestehende Routen
+        werden auf Abweichungen geprüft, nicht blind neu geschrieben.
+
+    --user USER
+        Nur das angegebene Shell-Benutzerkonto betrachten.
+
+    --max-accounts N
+        Maximal N Benutzerkonten pro Aufruf verändern (1..50, Standard: 10).
+        GRENZT NICHT DEN GLOBALEN SCAN EIN: ohne --user werden weiterhin
+        sämtliche relevanten Shell-Benutzer geprüft.
+
+    --manager PFAD
+        Alternativen PHP-/CGI-Manager laden. Nur für ausdrücklich geprüfte
+        Admin-/Entwicklungsszenarien; im Regelbetrieb nicht verwenden.
+
+BEISPIELE
+    envs_web_autoprovision
+        Gesamten Bestand lesen und mögliche Änderungen anzeigen.
+
+    envs_web_autoprovision --user creme
+        Nur creme prüfen; keine Änderungen.
+
+    envs_web_autoprovision --user piuvas --max-accounts 1
+        Nur piuvas prüfen; keine Änderungen.
+
+    envs_web_autoprovision --apply --user USER --max-accounts 1
+        Einzelnen Benutzer abgleichen. ACHTUNG: Kann Dienste starten,
+        Routen verändern und nginx neu laden. Nicht zum bloßen Test nutzen.
+
+    envs_web_autoprovision --apply --max-accounts 10
+        Produktionsmodus des systemd-Dienstes; maximal 10 geänderte Konten.
+        Bei keinem Änderungsbedarf: kein nginx-Reload, kein Transaktionsbackup.
+
+AUSGABE / EXITSTATUS
+    stdout: Ein JSON-Objekt pro Zeile (JSONL), z. B. event=scan,
+            plan, staged, nginx_batch_transaction, nginx_batch_reloaded,
+            activated, deferred, skip, blocked, drift, complete oder fatal.
+    stderr: Textausgaben des untergeordneten Managers und Fehlermeldungen.
+
+    complete.changed_accounts  geänderte Benutzerkonten im Lauf
+    complete.deferred          wegen Batch-Limit verschobene Aktionen
+    complete.blocked           blockierte/übersprungene Aktionen (aggregiert)
+    complete.errors            Ausführungsfehler
+    complete.skipped           bewusst übersprungene Fälle
+    complete.drift             abweichende bereits provisionierte Dienste
+    fail_closed_verified      nginx-Schutzregeln beim Scan überprüft
+
+    0: keine Ausführungsfehler oder Drift. Einzelne Scan-Warnungen können
+       trotzdem als skip/blocked in JSON erscheinen.
+    1: Fehler oder Drift beim Abgleich.
+    2: fataler Fehler (z. B. unzulässiger Zustand/Voraussetzung).
+
+SICHERE TRANSAKTIONEN / BACKUPS
+    Automatische nginx-Map-Transaktionen werden kurzfristig gespeichert:
+
+      /var/lib/envs-web-autoprovision/transactions/nginx-batch-*
+
+    Nach Erfolg oder erfolgreich geprüftem Rollback werden sie entfernt.
+    Bei unvollständigem Rollback bleibt die Transaktion erhalten und die
+    dauerhafte Sperrmarkierung verhindert weitere automatische Deployments:
+
+      /var/lib/envs-web-autoprovision/nginx-pending
+
+    Beim Vorhandensein dieser Markierung NICHT einfach löschen und NICHT
+    weitere --apply-Läufe erzwingen; Maps, Transaktion und Logs prüfen.
+    Die ältere /run/envs-web-autoprovision-nginx-pending-Markierung wird aus
+    Sicherheitsgründen ebenfalls erkannt.
+
+------------------------------------------------------------------------
+
+ENVS_PHP_FPM_MANAGE(8)                   MANUELLER MANAGER, Version 20.4.2
+
+AUFRUF
+    envs_php_fpm_manage AKTION [BENUTZER] [OPTIONEN]
+    envs_php_fpm_manage AKTION --help
+    envs_php_fpm_manage --help
+
+LESENDE AKTIONEN (keine Konfigurationsänderungen)
+    plan USER
+        Isolationsmodell, UID, Webroot, Risiken und Voraussetzungen anzeigen.
+
+    status USER
+        Vorhandene PHP-FPM-Konfiguration, Backend-Route und Boot-Status.
+
+    check USER
+        Installierte PHP-FPM-Konfiguration und Aktivierungsmarker prüfen.
+
+    discover [--user USER] [--summary] [--with-cgi]
+        Rekursive PHP-Bestandsaufnahme. --summary liefert einen Überblick;
+        --with-cgi ergänzt die CGI-Bestandsaufnahme pro Benutzer.
+
+    sync --dry-run [--user USER]
+        Lesende Kandidatenliste; --dry-run ist verpflichtend.
+
+    cgi-inventory [--user USER] [--summary] [--json]
+        Systemweite oder benutzerspezifische CGI-Inventur. --json gibt einen
+        maschinenlesbaren Bericht aus (schema_version=2); Scan-Warnungen
+        und Sicherheitsbefunde werden getrennt dargestellt. Exitcode 1 bei
+        sicherheitsrelevantem/unvollständigem Scan möglich.
+
+    cgi-plan USER
+        Geplante CGI-Dateien, Unit-/Socket-Pfade und Reihenfolge zeigen.
+
+    cgi-status USER
+        CGI-Unit-Konfiguration, Workerzahl, Socket, Boot- und nginx-Routing.
+
+    cgi-audit USER
+        CGI-Hinweise und Isolation prüfen; fehlende private Route ist bei
+        dieser orientierenden Prüfung nicht zwangsläufig ein Fehler.
+
+    cgi-check USER
+        Wie cgi-audit, aber streng: fehlende private CGI-Route gilt als Fehler.
+
+    cgi-idle-status USER
+        CGI-Socket-/Service-Zustand und konfigurierte Worker anzeigen.
+        Kein zuverlässiger In-Flight-/Idle-Zähler; kein Auto-Idle-Stop.
+
+OFFLINE / STAGING
+    stage USER --review-only
+        Root-private PHP-Reviewdateien erzeugen; schreibt keine produktive
+        nginx-Konfiguration und startet keinen Dienst. Kann unter /root
+        Reviewartefakte erzeugen. --review-only ist verpflichtend.
+
+AKTIONEN MIT OPTIONALEN ÄNDERUNGEN
+    add USER [--dry-run | --commit] [--confirm-uid UID]
+        PHP-FPM-Unit-/Pool-Konfiguration installieren, zunächst ohne
+        Aktivierung und ohne nginx-Routing.
+
+    enable USER [--dry-run | --commit] [--confirm-uid UID]
+                [--confirm-reviewed]
+        PHP-Aktivierungsmarker und privaten Socket einschalten, aber
+        noch keine nginx-Route veröffentlichen.
+
+    route USER [--dry-run | --commit] [--confirm-uid UID]
+               [--confirm-reviewed]
+        nginx-PHP-Map auf privaten Socket umstellen.
+
+    unroute USER [--dry-run | --commit] [--confirm-uid UID]
+        Private nginx-PHP-Route entfernen. ACHTUNG: Bei den aktuellen
+        User-Fail-Closed-Guards ist der gemeinsame Fallback gesperrt (403).
+        Nicht als normale Rückmigration zur Shared-Ausführung verstehen.
+
+    disable USER [--dry-run | --commit] [--confirm-uid UID]
+        Private PHP-Units/Socket deaktivieren, wenn keine Route mehr darauf
+        zeigt und alte nginx-Worker abgearbeitet sind.
+
+    remove USER [--dry-run | --commit] [--confirm-uid UID]
+        Private PHP-FPM-Konfigurationsdatei nach gesichertem Entfernen
+        löschen; nur nach unroute und disable.
+
+    cgi-stage USER [--dry-run | --commit] [--confirm-uid UID]
+        Benutzerbezogene CGI-systemd-Service-/Socket-Dateien installieren,
+        aber noch nicht starten oder routen.
+
+    cgi-enable USER [--dry-run | --commit] [--confirm-uid UID]
+                    [--confirm-reviewed]
+        Privaten CGI-Socket starten und für den Systemstart aktivieren.
+
+    cgi-route USER [--dry-run | --commit] [--confirm-uid UID]
+                   [--confirm-reviewed]
+        nginx-CGI-Map auf privaten CGI-Socket umstellen.
+
+    cgi-unroute USER [--dry-run | --commit] [--confirm-uid UID]
+                     [--confirm-legacy-fallback]
+        Private CGI-Route entfernen. ACHTUNG: Die aktuellen User-Guards
+        verweigern danach CGI-Ausführung am Shared-Fallback mit HTTP 403.
+        Rückmigration nur nach gesonderter Sicherheitsprüfung.
+
+    cgi-disable USER [--dry-run | --commit] [--confirm-uid UID]
+        Private CGI-Units/Socket stoppen/deaktivieren; nur wenn keine
+        private nginx-Route mehr vorhanden ist.
+
+    cgi-remove USER [--dry-run | --commit] [--confirm-uid UID]
+        Benutzerbezogene CGI-Unit-Dateien nach Abschaltung entfernen.
+
+    cgi-workers USER --workers {1,2,3,4}
+                     [--dry-run | --commit] [--confirm-uid UID]
+        CGI-Workerzahl in root-eigener Service-Unit eintragen. Aktive
+        Dienste werden dabei NICHT automatisch neu gestartet.
+
+SCHREIBOPTIONEN / SICHERHEIT
+    Standard ohne --commit: Vorschau; --dry-run: explizite Vorschau.
+    --commit: Root-verwaltete Änderungen tatsächlich durchführen.
+    --confirm-uid UID: aktuelle Shell-UID ausdrücklich bestätigen.
+    --confirm-reviewed: manuelle Vorprüfung für sicherheitsrelevante
+        Aktivierungs-/Routingaktionen bestätigen; niemals blind setzen.
+    --confirm-legacy-fallback: nur bei cgi-unroute; kein Freibrief, die
+        produktiven nginx-Fail-Closed-Guards auszuschalten.
+
+    WICHTIG: Der manuelle Manager besitzt historisch noch einzelne
+    Backup-/Rollback-Routinen mit Verzeichnissen unter /root, z. B.
+    envs-php-v20-map-* und envs-cgi-v20-2-map-*. Diese manuellen Routinen
+    sind NICHT dieselben wie das bereinigte Auto-Provisioner-Batch-System.
+    Kein planmäßiger Aufruf der manuellen Route-Befehle durch den Timer.
+
+BEISPIELE (LESEND)
+    envs_php_fpm_manage status creme
+    envs_php_fpm_manage check piuvas
+    envs_php_fpm_manage cgi-status creme
+    envs_php_fpm_manage cgi-check winter
+    envs_php_fpm_manage discover --summary --with-cgi
+    envs_php_fpm_manage cgi-inventory --summary
+    envs_php_fpm_manage cgi-inventory --user creme
+    envs_php_fpm_manage cgi-inventory --json > /var/tmp/envs-cgi.json
+    envs_php_fpm_manage cgi-idle-status creme
+    envs_php_fpm_manage route piuvas --dry-run
+    envs_php_fpm_manage cgi-workers creme --workers 2 --dry-run
+
+------------------------------------------------------------------------
+
+SYSTEMD / REGELBETRIEB
+    Timer:   envs-web-autoprovision.timer
+    Service: envs-web-autoprovision.service
+    Takt:    OnCalendar=*:0/15 (alle 15 Minuten)
+    Modus:   --apply --max-accounts 10 (Service-Override apply.conf)
+
+    systemctl status envs-web-autoprovision.timer --no-pager
+        Timerstatus anzeigen.
+
+    systemctl list-timers --all envs-web-autoprovision.timer
+        Letzte/nächste Ausführung anzeigen.
+
+    systemctl status envs-web-autoprovision.service --no-pager
+        Letzten/aktiven Service-Lauf anzeigen.
+
+    journalctl -u envs-web-autoprovision.service -n 100 --no-pager
+        JSONL-Ereignisse und stderr-Fehler der letzten Läufe.
+
+    systemctl stop envs-web-autoprovision.timer
+        Automatische Ausführung vor manueller Wartung unterbrechen.
+        Bei parallel bereits laufendem Dienst dessen Abschluss prüfen!
+
+    systemctl start envs-web-autoprovision.timer
+        Automatische Ausführung fortsetzen (ggf. Nachhollauf durch
+        Persistent=true).
+
+    nginx -t
+        nginx-Konfiguration syntaxprüfen; kein Reload.
+
+    systemctl show nginx.service -p MainPID -p TasksCurrent -p MemoryCurrent
+        Produktiven nginx-Prozessstatus prüfen.
+
+DATEIEN / PFADÜBERSICHT
+    /home/USER/public_html/
+        Benutzer-Webroot (statische Inhalte, PHP-/CGI-Dateien).
+
+    /etc/envs/php-fpm/user-USER.conf
+    /etc/envs/php-fpm/user-USER.allow
+        Root-verwalteter PHP-Pool und Aktivierungsmarker.
+
+    /etc/nginx/sites-enabled/user.envs.net.conf
+        nginx-PHP-Backend-Map für Standard-Benutzerrouten.
+
+    /etc/nginx/conf.d/envs-cgi-backends.conf
+        nginx-CGI-Backend-Map für Standard-Benutzerrouten.
+
+    /etc/nginx/snippets/user.envs.conf
+    /etc/nginx/snippets/envs_user_alias_php
+    /etc/nginx/sites-enabled/envs.net.conf
+        Standard-User-Fail-Closed-Guards für PHP und CGI.
+
+    /run/envs-php-user-USER/php.sock
+        Privater PHP-FPM-Socket.
+
+    /run/envs-cgi-user-USER/fcgiwrap.sock
+        Privater CGI-FastCGI-Socket.
+
+    /etc/systemd/system/envs-php-user@.service
+    /etc/systemd/system/envs-php-user@.socket
+        PHP-FPM-Systemd-Templates.
+
+    /etc/systemd/system/envs-cgi-user-USER.service
+    /etc/systemd/system/envs-cgi-user-USER.socket
+        Benutzerbezogene CGI-Systemd-Units.
+
+    /var/lib/envs-web-autoprovision/transactions/
+        Kurzlebige Batch-Sicherungen (normalerweise leer).
+
+    /var/lib/envs-web-autoprovision/nginx-pending
+        Dauerhaftes Recovery-Signal bei nicht abgeschlossenem Deployment.
+
+    /var/backups/envs-web-autoprovision/
+        Einmalige Versions-/Installerbackups (getrennt vom Automatikbetrieb).
+
+    /var/backups/envs-php-fpm-cosmetic/
+        Rollback der kosmetischen Manager-Aktualisierung auf v20.4.2.
+
+FEHLERSUCHE / HINWEISE
+    - Ein neu hochgeladenes PHP-/CGI-Skript kann bis zur Provisionierung an
+      den Standardrouten HTTP 403 erhalten. Statisches HTML funktioniert
+      unabhängig davon.
+    - Ein leerer Transaktionsordner und eine fehlende Pending-Markierung
+      sind nach einem erfolgreichen idempotenten Lauf normal.
+    - Beim erfolgreichen nginx-Batch-Deployment erfolgt ein Reload; bei
+      Fehlern und Rollback kann ein weiterer Reload erforderlich sein.
+      Langlebige WebSocket-Verbindungen können alte Worker
+      noch eine Weile halten (worker_shutdown_timeout 1h).
+    - scan/complete ohne plan/staged bedeutet: derzeit nichts zu ändern.
+    - Ein erfolgreiches complete im Vorschau-Modus beweist keine neue
+      produktive PHP-/CGI-Aktivierung; ein vollständiger End-to-End-Test
+      für neu angelegte Benutzer ist gesondert erforderlich.
+    - Custom-nginx-VHosts, Spezialrouten und Benutzerdatei-Berechtigungen
+      werden nicht automatisch umfassend sicherheitsgeprüft.
+    - Fail-Closed-Konfigurationen nicht entfernen, nur um 403 zu umgehen.
+
+ROOT-CLEANUP(8)                    OPTIONALER ARCHIVIERUNGSHELFER
+
+AUFRUF
+    bash envs-root-cleanup.sh --list
+        Zeigt eine streng begrenzte Menge von Migrationsskripten, alten
+        Scan-Logs und Testartefakten. Keine Änderungen (Standard).
+
+    bash envs-root-cleanup.sh --apply
+        Verschiebt NUR die in der Vorschau genannten Dateien in ein neues
+        Archiv unter /root/archive/envs-web-hardening/root-cleanup-*/.
+        Keine Löschung; kein nginx-/PHP-Neustart; kein Timer-Eingriff.
+        Ein MANIFEST.tsv hält Original- und Zielpfade fest.
+
+    Nicht enthalten: Dotfiles, private Daten, laufende Konfigurationen,
+    Quota-/Security-Artefakte und aktuelle Rollback-Verzeichnisse.
+    Vor --apply die Liste vollständig prüfen. Es ist ein separat
+    heruntergeladenes Hilfsskript, nicht Teil der produktiven Automatik.
+
+SIEHE AUCH
+    envs_web_autoprovision --help
+    envs_php_fpm_manage --help
+    envs_php_fpm_manage AKTION --help
+    systemctl(1), systemd.timer(5), journalctl(1), nginx(8)
+    envs-root-cleanup.sh --help
+
+ENDE

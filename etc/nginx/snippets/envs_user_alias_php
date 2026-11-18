@@ -1,0 +1,13 @@
+# PHP under /~USER/ and /u/USER/: alias paths need $request_filename.
+# The accompanying param include defines SCRIPT_FILENAME exactly once.
+include snippets/envs_user_alias_php_params;
+fastcgi_index index.php;
+if (!-f $request_filename) { return 404; }
+fastcgi_split_path_info ^(.+\.php)(/.+)$;
+    if ($envs_php_backend = "unix:/run/php/php8.4-fpm.sock") {
+        return 403;
+    }
+fastcgi_pass $envs_php_backend;
+fastcgi_connect_timeout 3600;
+fastcgi_send_timeout 3600;
+fastcgi_read_timeout 3600;

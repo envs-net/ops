@@ -19,12 +19,16 @@ if (( EUID != 0 )); then
     exit 1
 fi
 
-for command in jq ssh-keygen sudo logger; do
+for command in jq ssh-keygen sudo logger flock awk getent; do
     command -v "$command" >/dev/null 2>&1 || fail "required command not found: $command"
 done
 
 [[ -x "$USER_MANAGE" ]] || fail "$USER_MANAGE is missing or not executable"
 [[ -d "$QUEUE_DIR" ]] || fail "$QUEUE_DIR is missing (run the migration/setup first)"
+
+# Prevent two reviewers from handling the same request simultaneously.
+exec 8>/run/lock/envs_signups_review.lock
+flock -n 8 || fail 'Another signup review is already running'
 
 install -d -m 0700 "$APPROVED_DIR" "$REJECTED_DIR"
 touch "$CURRENT_FILE"
@@ -33,13 +37,17 @@ reviewed_by="${SUDO_USER:-root}"
 
 remove_current_user() {
     local username=$1 tmp
-    tmp=$(mktemp)
-    (
-        flock -x 9
-        grep -vxF -- "$username" "$CURRENT_FILE" > "$tmp" || true
-        cat "$tmp" > "$CURRENT_FILE"
-    ) 9<>"$CURRENT_FILE"
-    rm -f "$tmp"
+    tmp=$(mktemp) || return 1
+    # awk correctly handles an empty result and reports genuine read errors.
+    if ! (
+        flock -x 9 || exit 1
+        awk -v target="$username" '$0 != target' "$CURRENT_FILE" > "$tmp" || exit 1
+        cat "$tmp" > "$CURRENT_FILE" || exit 1
+    ) 9<>"$CURRENT_FILE"; then
+        rm -f -- "$tmp"
+        return 1
+    fi
+    rm -f -- "$tmp"
 }
 
 archive_request() {
@@ -51,8 +59,8 @@ archive_request() {
         *) fail "unsupported archive status: $status" ;;
     esac
 
-    tmp=$(mktemp)
-    jq \
+    tmp=$(mktemp) || return 1
+    if ! jq \
         --arg status "$status" \
         --arg reviewed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
         --arg reviewed_by "$reviewed_by" \
@@ -61,11 +69,52 @@ archive_request() {
          | .reviewed_at = $reviewed_at
          | .reviewed_by = $reviewed_by
          | if $review_reason != "" then .review_reason = $review_reason else . end' \
-        "$file" > "$tmp"
+        "$file" > "$tmp"; then
+        rm -f -- "$tmp"
+        return 1
+    fi
 
-    dest="$dest_dir/$(basename "${file%.json}")-$stamp.json"
-    install -m 0600 "$tmp" "$dest"
-    rm -f "$tmp" "$file"
+    # mktemp prevents overwriting another archived signup in the same second.
+    dest=$(mktemp "$dest_dir/$(basename "${file%.json}")-$stamp-XXXXXX.json") || {
+        rm -f -- "$tmp"
+        return 1
+    }
+    if ! install -m 0600 "$tmp" "$dest"; then
+        rm -f -- "$tmp" "$dest"
+        return 1
+    fi
+    if ! rm -f -- "$file"; then
+        # An archived copy now exists, but the queued original remains. The
+        # operator must reconcile it to prevent processing it twice.
+        printf 'Archive written to %s, but could not remove %s. Resolve manually.\n' \
+            "$dest" "$file" >&2
+        rm -f -- "$tmp"
+        return 1
+    fi
+    rm -f -- "$tmp"
+}
+
+# Notify the applicant before the request is archived. Keeping this separate
+# makes failed mail submissions retryable without silently dropping a request.
+send_rejection_mail() {
+    local username=$1 email=$2 reason=${3:-}
+
+    {
+        printf 'MIME-Version: 1.0\r\n'
+        printf 'Content-Type: text/plain; charset=UTF-8\r\n'
+        printf 'Content-Transfer-Encoding: 8bit\r\n'
+        printf 'From: hosting@envs.net\r\n'
+        printf 'To: %s\r\n' "$email"
+        printf 'Subject: envs.net - Signup request rejected\r\n'
+        printf '\r\n'
+        printf 'Hello,\n\n'
+        printf 'Thank you for your interest in envs.net.\n\n'
+        printf 'Unfortunately, we cannot approve your signup request for the account "%s".\n' "$username"
+        if [[ -n "$reason" ]]; then
+            printf '\nReason:\n%s\n' "$reason"
+        fi
+        printf '\nBest regards,\nThe envs.net team\n'
+    } | sendmail -oi -t
 }
 
 key_fingerprint() {
@@ -83,11 +132,11 @@ print_request() {
     username=$(jq -er '.username | strings' "$file") || return 1
     email=$(jq -er '.email | strings' "$file") || return 1
     sshkey=$(jq -er '.sshkey | strings' "$file") || return 1
-    interest=$(jq -r '.interest // ""' "$file")
-    submitted_ip=$(jq -r '.submitted_ip // "unknown"' "$file")
-    verified_ip=$(jq -r '.verified_ip // "unknown"' "$file")
-    submitted_at=$(jq -r 'if .submitted_at then (.submitted_at | todate) else "unknown" end' "$file")
-    verified_at=$(jq -r 'if .verified_at then (.verified_at | todate) else "unknown" end' "$file")
+    interest=$(jq -r '.interest // ""' "$file") || return 1
+    submitted_ip=$(jq -r '.submitted_ip // "unknown"' "$file") || return 1
+    verified_ip=$(jq -r '.verified_ip // "unknown"' "$file") || return 1
+    submitted_at=$(jq -r 'if .submitted_at then (.submitted_at | todate) else "unknown" end' "$file") || return 1
+    verified_at=$(jq -r 'if .verified_at then (.verified_at | todate) else "unknown" end' "$file") || return 1
     fingerprint=$(key_fingerprint "$sshkey")
 
     printf '\n============================================================\n'
@@ -104,6 +153,24 @@ print_request() {
     printf '============================================================\n'
 }
 
+# A failed provisioning attempt leaves an existing, expired Unix account.
+# Do not treat its mere existence as a successful signup.
+check_existing_account() {
+    local username=$1 entry shadow password expiry uid home today
+    entry=$(getent passwd "$username") || return 1
+    IFS=: read -r _ _ uid _ _ home _ <<< "$entry"
+    [[ "$home" == "/home/$username" && "$uid" =~ ^[0-9]+$ ]] || return 1
+
+    shadow=$(getent shadow "$username") || return 1
+    IFS=: read -r _ password _ _ _ _ _ expiry _ <<< "$shadow"
+    [[ "$password" != '!'* && "$password" != '*'* ]] || return 1
+    if [[ -n "$expiry" ]]; then
+        [[ "$expiry" =~ ^[0-9]+$ ]] || return 1
+        today=$(( $(date -u +%s) / 86400 ))
+        (( expiry > today )) || return 1
+    fi
+}
+
 approve_request() {
     local file=$1 username email sshkey answer
     username=$(jq -er '.username | strings' "$file") || fail "invalid username in $file"
@@ -111,7 +178,19 @@ approve_request() {
     sshkey=$(jq -er '.sshkey | strings' "$file") || fail "invalid sshkey in $file"
 
     if id -u "$username" >/dev/null 2>&1; then
-        printf '\nUser %s already exists. Skipping account creation and opening mutt.\n' "$username"
+        if ! check_existing_account "$username"; then
+            printf 'Account %s exists but is expired, locked, or otherwise invalid.\n' "$username" >&2
+            printf 'Inspect/repair the partial account manually; request remains queued.\n' >&2
+            return 1
+        fi
+        printf '\nUser %s already exists. Verify it was fully provisioned.\n' "$username"
+        if ! read -r -p 'Continue with existing account? [y/N] ' answer; then
+            return 1
+        fi
+        case "$answer" in
+            y|Y|yes|YES) ;;
+            *) return 1 ;;
+        esac
     else
         printf '\nCreating %s with envs_user_manage...\n\n' "$username"
         if ! "$USER_MANAGE" add "$username" "$email" "$sshkey" skip; then
@@ -124,8 +203,6 @@ approve_request() {
         fi
     fi
 
-    remove_current_user "$username"
-
     printf '\nOpening mutt as %s. Quit mutt to return here.\n\n' "$username"
     sleep 1
     if ! sudo -iu "$username" mutt; then
@@ -133,34 +210,57 @@ approve_request() {
         return 1
     fi
 
-    printf '\n'
-    read -r -p 'Account/mail check successful? [y/N] ' answer
-    case "$answer" in
-        y|Y|yes|YES)
-            archive_request "$file" approved
-            logger -t envs-signup "approved user=$username admin=$reviewed_by"
-            printf 'Approved and archived: %s\n' "$username"
-            ;;
-        *)
-            printf 'Not archived. The request remains in %s for another check.\n' "$QUEUE_DIR"
-            ;;
-    esac
+    if ! archive_request "$file" approved; then
+        printf 'Approval archiving failed for %s. Inspect before retrying.\n' "$username" >&2
+        return 1
+    fi
+    if ! remove_current_user "$username"; then
+        printf 'Approved and archived, but current-signup cleanup failed for %s. Fix manually.\n' "$username" >&2
+        return 1
+    fi
+    logger -t envs-signup "approved user=$username admin=$reviewed_by" || true
+    printf 'Approved and archived: %s\n' "$username"
 }
 
 reject_request() {
-    local file=$1 username answer reason
+    local file=$1 username email answer reason
     username=$(jq -er '.username | strings' "$file") || fail "invalid username in $file"
-    read -r -p "Reject signup for $username? [y/N] " answer
+    email=$(jq -er '.email | strings' "$file") || fail "invalid email in $file"
+    read -r -p "Reject signup for $username? [y/N] " answer || return 1
     case "$answer" in
         y|Y|yes|YES) ;;
         *) return 0 ;;
     esac
 
-    read -r -p 'Optional reason (stored locally): ' reason
-    remove_current_user "$username"
-    archive_request "$file" rejected "$reason"
-    logger -t envs-signup "rejected user=$username admin=$reviewed_by"
-    printf 'Rejected and archived: %s\n' "$username"
+    # The address is inserted into the To: header: reject malformed or
+    # header-injection addresses before passing any message to sendmail.
+    if ! [[ "$email" =~ ^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then
+        printf 'Invalid recipient email for %s: request remains queued.\n' "$username" >&2
+        return 1
+    fi
+    if ! command -v sendmail >/dev/null 2>&1; then
+        printf 'sendmail not found: request remains queued.\n' >&2
+        logger -t envs-signup "rejection-mail-failed user=$username admin=$reviewed_by" || true
+        return 1
+    fi
+
+    read -r -p 'Optional reason (included in email and stored locally): ' reason || return 1
+    if ! send_rejection_mail "$username" "$email" "$reason"; then
+        printf 'Could not submit rejection email for %s; request remains queued.\n' "$username" >&2
+        logger -t envs-signup "rejection-mail-failed user=$username admin=$reviewed_by" || true
+        return 1
+    fi
+
+    if ! archive_request "$file" rejected "$reason"; then
+        printf 'Email submitted, but archiving failed for %s. Check manually before retrying (avoid a duplicate email).\n' "$username" >&2
+        return 1
+    fi
+    if ! remove_current_user "$username"; then
+        printf 'Rejected and archived, but current-signup cleanup failed for %s. Fix manually.\n' "$username" >&2
+        return 1
+    fi
+    logger -t envs-signup "rejected user=$username admin=$reviewed_by" || true
+    printf 'Rejected and archived: %s (email submitted to sendmail)\n' "$username"
 }
 
 review_file() {
@@ -172,9 +272,14 @@ review_file() {
         return 0
     fi
 
-    username=$(jq -r '.username' "$file")
+    username=$(jq -r '.username' "$file") || return 1
     if ! [[ "$username" =~ ^[a-z][a-z0-9]{1,31}$ ]]; then
         printf 'Skipping request with invalid username: %s\n' "$file" >&2
+        return 0
+    fi
+
+    if [[ "$(basename "$file")" != "$username.json" ]]; then
+        printf 'Skipping mismatched signup filename/user: %s\n' "$file" >&2
         return 0
     fi
 
@@ -184,10 +289,24 @@ review_file() {
     }
 
     while true; do
-        read -r -p '[a]pprove  [r]eject  [s]kip  [q]uit: ' action
+        if ! read -r -p '[a]pprove  [r]eject  [s]kip  [q]uit: ' action; then
+            return 10
+        fi
         case "$action" in
-            a|A) approve_request "$file"; break ;;
-            r|R) reject_request "$file"; break ;;
+            a|A)
+                if ! approve_request "$file"; then
+                    printf 'Approval not completed. Inspect the account/request before retrying.\n' >&2
+                    return 1
+                fi
+                break
+                ;;
+            r|R)
+                if ! reject_request "$file"; then
+                    printf 'Rejection not completed; check the request/archive status before retrying.\n' >&2
+                    return 1
+                fi
+                break
+                ;;
             s|S|'') break ;;
             q|Q) return 10 ;;
             *) printf 'Please choose a, r, s or q.\n' ;;
@@ -204,9 +323,12 @@ if [[ $# -eq 1 ]]; then
     [[ "$username" =~ ^[a-z][a-z0-9]{1,31}$ ]] || fail "invalid username"
     file="$QUEUE_DIR/$username.json"
     [[ -f "$file" ]] || fail "no queued signup for $username"
+    status=0
     review_file "$file" || status=$?
-    [[ ${status:-0} -eq 10 ]] && exit 0
-    exit 0
+    if [[ $status -eq 10 ]]; then
+        exit 0
+    fi
+    exit "$status"
 fi
 
 shopt -s nullglob
@@ -217,8 +339,15 @@ if [[ ${#files[@]} -eq 0 ]]; then
 fi
 
 printf '%d verified signup request(s) queued.\n' "${#files[@]}"
+had_errors=0
 for file in "${files[@]}"; do
     status=0
     review_file "$file" || status=$?
-    [[ $status -eq 10 ]] && break
+    if [[ $status -eq 10 ]]; then
+        break
+    fi
+    if [[ $status -ne 0 ]]; then
+        had_errors=1
+    fi
 done
+exit "$had_errors"
