@@ -1,0 +1,3142 @@
+#!/usr/bin/env python3
+"""envs.net shell-UID PHP-FPM inventory and guarded deployment (v20.4.2).
+
+Target architecture: one PHP-FPM systemd instance per eligible shell user,
+running as that existing shell UID, with a root-owned FastCGI socket.
+Existing XFS USER quota applies. No additional PHP UID or project quota.
+
+v20.4.1 distinguishes CGI scan truncation, real security findings, and
+informational non-CGI symlinks in the existing v20.4 discovery scanner.
+No deployment behavior changes. No CGI is executed; candidates are NEVER
+migration approvals.
+
+"""
+from __future__ import annotations
+
+import argparse
+import configparser
+import hashlib
+import json
+import fcntl
+import contextlib
+import os
+import pwd
+import grp
+import re
+import shutil
+import stat
+import subprocess
+import sys
+from collections import deque
+from dataclasses import dataclass
+from pathlib import Path
+
+HOME_ROOT = Path('/home')
+CONFIG_DIR = Path('/etc/envs/php-fpm')
+WEB_USER = 'envs-web'
+USER_PATTERN = re.compile(r'[a-z_][a-z0-9_-]*\Z', re.ASCII)
+MAX_USER_LENGTH = 23
+MAX_ENTRIES = 20000
+MAX_DIRS = 3000
+MAX_DEPTH = 30
+MAX_ISSUES = 8
+MAX_EXAMPLES = 3
+BOOTSTRAP_TEMPLATE_NAME = 'your_index_template.php'
+CANONICAL_TEMPLATE = Path('/etc/skel/public_html/your_index_template.php')
+HISTORICAL_HASHES_FILE = CONFIG_DIR / 'bootstrap-hashes'
+MAX_TEMPLATE_BYTES = 256 * 1024
+MAX_HASHES_FILE_BYTES = 64 * 1024
+HASH_PATTERN = re.compile(r'[0-9a-f]{64}\Z', re.ASCII)
+
+# Current STAGED services use envs-php-USERNAME; not safe to reuse unchanged.
+STAGED_SERVICE = Path('/etc/systemd/system/envs-php-activation@.service')
+STAGED_SOCKET = Path('/etc/systemd/system/envs-php-activation@.socket')
+
+
+def run(argv: list[str], timeout: float = 15) -> subprocess.CompletedProcess[str] | None:
+    try:
+        return subprocess.run(argv, text=True, capture_output=True, check=False,
+                              timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def validate_name(name: str) -> str:
+    if len(name) > MAX_USER_LENGTH or not USER_PATTERN.fullmatch(name):
+        raise ValueError(
+            f'invalid username {name!r}: allowed [a-z_][a-z0-9_-]*, '
+            f'maximum {MAX_USER_LENGTH} characters'
+        )
+    return name
+
+
+def account(name: str) -> pwd.struct_passwd | None:
+    try:
+        return pwd.getpwnam(name)
+    except KeyError:
+        return None
+
+
+def read_ini(file: Path) -> tuple[configparser.ConfigParser | None, str | None]:
+    parser = configparser.ConfigParser(interpolation=None, strict=False)
+    try:
+        with file.open(encoding='utf-8') as fp:
+            parser.read_file(fp)
+    except (OSError, configparser.Error, UnicodeError) as exc:
+        return None, str(exc)
+    return parser, None
+
+
+def _root_controlled_regular(path: Path, max_bytes: int) -> bytes:
+    """Read only trusted admin-controlled files (no symlink, size bounded)."""
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+    fd = os.open(path, flags)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o022:
+            raise ValueError(f'unsafe root-controlled reference: {path}')
+        if st.st_size > max_bytes:
+            raise ValueError(f'oversized reference: {path}')
+        data = os.read(fd, max_bytes + 1)
+        if len(data) > max_bytes:
+            raise ValueError(f'oversized reference: {path}')
+        return data
+    finally:
+        os.close(fd)
+
+
+def load_template_hashes() -> tuple[set[str], str, int]:
+    """Load current /etc/skel template and only explicitly approved old hashes."""
+    try:
+        current = hashlib.sha256(_root_controlled_regular(CANONICAL_TEMPLATE, MAX_TEMPLATE_BYTES)).hexdigest()
+    except (OSError, ValueError) as exc:
+        raise ValueError(f'cannot trust canonical PHP template {CANONICAL_TEMPLATE}: {exc}') from exc
+    hashes = {current}
+    historical = 0
+    try:
+        raw = _root_controlled_regular(HISTORICAL_HASHES_FILE, MAX_HASHES_FILE_BYTES)
+    except FileNotFoundError:
+        return hashes, current, historical
+    except (OSError, ValueError) as exc:
+        raise ValueError(f'cannot trust historical template hashes: {exc}') from exc
+    try:
+        content = raw.decode('ascii')
+    except UnicodeError as exc:
+        raise ValueError('historical template hashes must be ASCII') from exc
+    for number, line in enumerate(content.splitlines(), 1):
+        line = line.split('#', 1)[0].strip()
+        if not line:
+            continue
+        pieces = line.split()
+        if len(pieces) != 1 or not HASH_PATTERN.fullmatch(pieces[0]):
+            raise ValueError(f'invalid hash on {HISTORICAL_HASHES_FILE}:{number}')
+        digest = pieces[0]
+        if digest not in hashes:
+            historical += 1
+            hashes.add(digest)
+    return hashes, current, historical
+
+
+def _site_template_hash(root: Path, expected_uid: int, expected_dev: int) -> str | None:
+    """Hash a real, bounded, user-owned template, never following a leaf symlink."""
+    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+    dirflags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
+    try:
+        directory_fd = os.open(root, dirflags)
+        try:
+            fd = os.open(BOOTSTRAP_TEMPLATE_NAME, flags, dir_fd=directory_fd)
+            try:
+                st = os.fstat(fd)
+                if (not stat.S_ISREG(st.st_mode)
+                        or st.st_uid != expected_uid
+                        or st.st_dev != expected_dev
+                        or st.st_size > MAX_TEMPLATE_BYTES):
+                    return None
+                data = os.read(fd, MAX_TEMPLATE_BYTES + 1)
+                if len(data) > MAX_TEMPLATE_BYTES:
+                    return None
+                return hashlib.sha256(data).hexdigest()
+            finally:
+                os.close(fd)
+        finally:
+            os.close(directory_fd)
+    except OSError:
+        return None
+
+
+@dataclass(frozen=True)
+class SiteCandidate:
+    name: str
+    root: Path
+    resolved_root: Path | None
+    php_count: int
+    examples: tuple[str, ...] = ()
+    issues: tuple[str, ...] = ()
+    notes: tuple[str, ...] = ()
+    incomplete: bool = False
+    bootstrap_count: int = 0
+
+
+def _within(path: Path, home: Path) -> bool:
+    return path == home or home in path.parents
+
+
+def inspect_site(acct: pwd.struct_passwd, trusted_templates: set[str] | None = None) -> SiteCandidate | None:
+    """Bounded, read-only inventory of PHP scripts accessible under webroot.
+
+    Internal symlinks are resolved but never followed outside the *same* home;
+    any incomplete scan or suspicious component is REVIEW, not CANDIDATE.
+    File/permission checks are only a preliminary inventory: a provisioning
+    step must revalidate with race-resistant filesystem APIs before acting.
+    """
+    if trusted_templates is None:
+        trusted_templates = load_template_hashes()[0]
+    name = acct.pw_name
+    home = HOME_ROOT / name
+    root = home / 'public_html'
+    if acct.pw_dir != str(home) or home.parent != HOME_ROOT:
+        return None
+
+    problems: list[str] = []
+    notes: list[str] = []
+    examples: list[str] = []
+    incomplete = False
+    php_count = 0
+    bootstrap_count = 0
+    inspected_entries = 0
+    directories = 0
+
+    def issue(message: str) -> None:
+        if message not in problems and len(problems) < MAX_ISSUES:
+            problems.append(message)
+
+    def note(message: str) -> None:
+        if message not in notes and len(notes) < 3:
+            notes.append(message)
+
+    try:
+        validate_name(name)
+    except ValueError as exc:
+        return SiteCandidate(name, root, None, 0, issues=(str(exc),), incomplete=True)
+
+    try:
+        home_stat = home.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return SiteCandidate(name, root, None, 0, issues=(f'cannot inspect home: {exc}',), incomplete=True)
+    if not stat.S_ISDIR(home_stat.st_mode):
+        return SiteCandidate(name, root, None, 0, issues=('home is not a real directory',), incomplete=True)
+    if home_stat.st_uid != acct.pw_uid:
+        issue(f'home owned by UID {home_stat.st_uid}, expected {acct.pw_uid}')
+    if home_stat.st_mode & 0o022:
+        issue(f'home group/other-writable ({stat.S_IMODE(home_stat.st_mode):04o})')
+
+    try:
+        root_lstat = root.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return SiteCandidate(name, root, None, 0, issues=(f'cannot inspect public_html: {exc}',), incomplete=True)
+    if not (stat.S_ISDIR(root_lstat.st_mode) or stat.S_ISLNK(root_lstat.st_mode)):
+        return SiteCandidate(name, root, None, 0, issues=('public_html is neither directory nor symlink',), incomplete=True)
+    if root_lstat.st_uid != acct.pw_uid:
+        issue(f'public_html entry owned by UID {root_lstat.st_uid}, expected {acct.pw_uid}')
+
+    try:
+        resolved_home = home.resolve(strict=True)
+        resolved_root = root.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        return SiteCandidate(name, root, None, 0, issues=(f'public_html target not resolvable: {exc}',), incomplete=True)
+    if not _within(resolved_root, resolved_home):
+        return SiteCandidate(name, root, resolved_root, 0,
+                             issues=(f'public_html points outside own home: {resolved_root}; not scanned',),
+                             incomplete=True)
+    try:
+        root_stat = resolved_root.stat()
+    except OSError as exc:
+        return SiteCandidate(name, root, resolved_root, 0, issues=(f'cannot stat target: {exc}',), incomplete=True)
+    if not stat.S_ISDIR(root_stat.st_mode):
+        return SiteCandidate(name, root, resolved_root, 0,
+                             issues=('resolved public_html is not a directory',), incomplete=True)
+    if root_stat.st_dev != home_stat.st_dev:
+        issue('public_html resides on a different filesystem (quota must be reviewed)')
+    if stat.S_ISLNK(root_lstat.st_mode):
+        note(f'public_html -> {resolved_root} (within own home)')
+
+    def validate_components(target: Path) -> None:
+        """Inspect all canonical path components beneath home, including symlink targets."""
+        try:
+            rel = target.relative_to(resolved_home)
+        except ValueError:
+            issue(f'path escapes home: {target}')
+            return
+        path = resolved_home
+        for part in rel.parts:
+            path = path / part
+            try:
+                st = path.lstat()
+            except OSError as exc:
+                issue(f'cannot inspect path component {path}: {exc}')
+                return
+            if st.st_uid != acct.pw_uid:
+                issue(f'{path} owned by UID {st.st_uid}, not {acct.pw_uid}')
+            if st.st_mode & 0o022:
+                issue(f'{path} group/other-writable ({stat.S_IMODE(st.st_mode):04o})')
+
+    # The resolved root may live in e.g. ~/projects/site/public.
+    validate_components(resolved_root)
+
+    todo: deque[tuple[Path, int]] = deque([(resolved_root, 0)])
+    seen: set[tuple[int, int]] = set()
+
+    while todo:
+        directory, depth = todo.popleft()
+        try:
+            dst = directory.stat()
+        except OSError as exc:
+            issue(f'cannot inspect directory {directory}: {exc}')
+            incomplete = True
+            continue
+        key = (dst.st_dev, dst.st_ino)
+        if key in seen:
+            continue
+        seen.add(key)
+        directories += 1
+        if directories > MAX_DIRS:
+            issue(f'scan exceeded {MAX_DIRS} directories; results incomplete')
+            incomplete = True
+            break
+        if dst.st_dev != home_stat.st_dev:
+            issue(f'cross-filesystem directory skipped: {directory}')
+            incomplete = True
+            continue
+        validate_components(directory)
+        try:
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    inspected_entries += 1
+                    if inspected_entries > MAX_ENTRIES:
+                        issue(f'scan exceeded {MAX_ENTRIES} filesystem entries; results incomplete')
+                        incomplete = True
+                        break
+                    item = Path(entry.path)
+                    is_php = entry.name.lower().endswith('.php')
+                    try:
+                        entry_stat = entry.stat(follow_symlinks=False)
+                    except OSError as exc:
+                        issue(f'cannot inspect {item}: {exc}')
+                        incomplete = True
+                        continue
+                    is_link = stat.S_ISLNK(entry_stat.st_mode)
+                    is_dir = stat.S_ISDIR(entry_stat.st_mode)
+                    if is_link:
+                        # Do not follow anything until its *resolved* target is within home.
+                        try:
+                            target = item.resolve(strict=True)
+                        except (OSError, RuntimeError) as exc:
+                            if is_php:
+                                issue(f'broken/unresolvable PHP symlink {item}: {exc}')
+                                incomplete = True
+                            continue
+                        if not _within(target, resolved_home):
+                            # Symlinked directories can contain executable PHP.
+                            try:
+                                target_is_dir = target.is_dir()
+                            except OSError:
+                                target_is_dir = False
+                            if target_is_dir or is_php:
+                                issue(f'symlink outside own home skipped: {item} -> {target}')
+                                incomplete = True
+                            continue
+                        try:
+                            target_stat = target.stat()
+                        except OSError as exc:
+                            issue(f'cannot stat symlink target {item}: {exc}')
+                            incomplete = True
+                            continue
+                        if entry_stat.st_uid != acct.pw_uid:
+                            issue(f'symlink owned by UID {entry_stat.st_uid}: {item}')
+                        validate_components(target)
+                        if stat.S_ISDIR(target_stat.st_mode):
+                            is_dir = True
+                            item = target
+                        elif stat.S_ISREG(target_stat.st_mode):
+                            if is_php:
+                                note(f'PHP symlink -> {target} (within own home)')
+                            entry_stat = target_stat
+                        elif is_php:
+                            issue(f'PHP symlink does not resolve to regular file: {item}')
+                            continue
+                    if is_dir:
+                        if depth >= MAX_DEPTH:
+                            issue(f'scan exceeded depth {MAX_DEPTH} at {item}; results incomplete')
+                            incomplete = True
+                        else:
+                            todo.append((item, depth + 1))
+                        continue
+                    if not is_php:
+                        continue
+                    if not stat.S_ISREG(entry_stat.st_mode):
+                        issue(f'PHP path is not a regular file: {item}')
+                        incomplete = True
+                        continue
+                    php_count += 1
+                    # Only verified template *contents* are ignored.
+                    # An index.php symlink to the template still indicates
+                    # usage. A customized root-level template is a candidate.
+                    if (directory == resolved_root
+                            and entry.name == BOOTSTRAP_TEMPLATE_NAME
+                            and not is_link):
+                        digest = _site_template_hash(directory, acct.pw_uid, home_stat.st_dev)
+                        if digest in trusted_templates:
+                            bootstrap_count += 1
+                        elif digest is None:
+                            issue(f'cannot safely fingerprint root PHP template: {item}')
+                    if len(examples) < MAX_EXAMPLES:
+                        examples.append(str(item))
+                    if entry_stat.st_uid != acct.pw_uid:
+                        issue(f'PHP file owned by UID {entry_stat.st_uid}: {item}')
+                    if entry_stat.st_mode & 0o022:
+                        issue(f'PHP file group/other-writable ({stat.S_IMODE(entry_stat.st_mode):04o}): {item}')
+                    if entry_stat.st_dev != home_stat.st_dev:
+                        issue(f'PHP file on separate filesystem: {item}')
+                if incomplete and inspected_entries > MAX_ENTRIES:
+                    break
+        except OSError as exc:
+            issue(f'cannot scan {directory}: {exc}')
+            incomplete = True
+
+    if not php_count and not incomplete:
+        return None
+    return SiteCandidate(name, root, resolved_root, php_count,
+                         tuple(examples), tuple(problems), tuple(notes), incomplete,
+                         bootstrap_count)
+
+
+def discover_sites(only_user: str | None = None) -> tuple[
+    list[SiteCandidate], list[SiteCandidate], list[SiteCandidate], int, int
+]:
+    """Scan actual NSS /home accounts only; never arbitrary /home directories."""
+    trusted_templates, _, _ = load_template_hashes()
+    eligible: list[SiteCandidate] = []
+    review: list[SiteCandidate] = []
+    template_only: list[SiteCandidate] = []
+    scanned = 0
+    no_php = 0
+    if only_user is not None:
+        validate_name(only_user)
+        wanted = account(only_user)
+        if wanted is None or wanted.pw_dir != str(HOME_ROOT / only_user):
+            raise ValueError(f'{only_user!r} is not a regular /home shell account')
+        accounts = [wanted]
+    else:
+        accounts = sorted(pwd.getpwall(), key=lambda a: a.pw_name)
+    for acct in accounts:
+        if acct is None or acct.pw_dir != str(HOME_ROOT / acct.pw_name):
+            continue
+        scanned += 1
+        site = inspect_site(acct, trusted_templates)
+        if site is None:
+            no_php += 1
+        elif site.php_count > 0 and site.php_count == site.bootstrap_count and not site.incomplete:
+            # Keep its path/permission warnings in the record, but do not
+            # plan any automatic PHP provisioning for a filename-only hint.
+            template_only.append(site)
+        elif site.issues or site.incomplete:
+            review.append(site)
+        else:
+            eligible.append(site)
+    return eligible, review, template_only, scanned, no_php
+
+
+def print_sites(items: list[SiteCandidate], label: str) -> None:
+    for site in items:
+        detail = f'{site.php_count} PHP file(s)'
+        if site.incomplete:
+            detail += ' [SCAN INCOMPLETE]'
+        print(f'{label:<16} {site.name:<24} {detail:<27} {site.root}')
+        for note in site.notes:
+            print(f'  = {note}')
+        for example in site.examples:
+            print(f'  + {example}')
+        for issue in site.issues:
+            print(f'  ! {issue}')
+
+
+def discover(only_user: str | None = None, summary: bool = False, with_cgi: bool = False) -> int:
+    print('=== PHP discovery: recursive *.php under /home/USER/public_html (READ ONLY) ===')
+    eligible, review, template_only, total, skipped = discover_sites(only_user)
+    if not summary:
+        print_sites(eligible, 'CANDIDATE')
+        print_sites(review, 'REVIEW')
+        # Deliberately avoid dumping >1000 bootstrap-only accounts by default.
+        print_sites(template_only[:15], 'TEMPLATE ONLY')
+        if len(template_only) > 15:
+            print(f'... {len(template_only) - 15} additional template-only accounts (use --user to inspect)')
+    print(f'\nShell accounts scanned : {total}')
+    print(f'Candidates             : {len(eligible)}')
+    print(f'Need manual review     : {len(review)}')
+    print(f'Template-only accounts : {len(template_only)} (not eligible for auto provisioning)')
+    print(f'No PHP found           : {skipped}')
+    print(f'PHP paths detected     : {sum(s.php_count for s in eligible + review + template_only)}')
+    print(f'Bootstrap paths        : {sum(s.bootstrap_count for s in eligible + review + template_only)}')
+    print('NO CHANGES MADE. Discovery is not a migration approval.')
+    _, current_digest, historical_count = load_template_hashes()
+    print(f'Current /etc/skel SHA256: {current_digest}')
+    print(f'Approved historical template SHA256 hashes: {historical_count}')
+    print('NOTE: template-only classification requires verified content hash.')
+    print('NOTE: only *.php is counted; nginx routing and other PHP extensions not audited.')
+    if with_cgi:
+        php_classes = {site.name: label for label, items in (
+            ('CANDIDATE', eligible), ('REVIEW', review), ('TEMPLATE ONLY', template_only))
+            for site in items}
+        print()
+        return cgi_inventory(only_user, summary=summary, php_classes=php_classes)
+    return 0
+
+
+def _quota_mount() -> tuple[str, bool]:
+    result = run(['findmnt', '-n', '-T', str(HOME_ROOT), '-o', 'TARGET,FSTYPE,OPTIONS'])
+    if result is None or result.returncode != 0:
+        return 'unavailable', False
+    parts = result.stdout.strip().split(None, 2)
+    if len(parts) != 3:
+        return result.stdout.strip() or 'unavailable', False
+    good = parts[0] == str(HOME_ROOT) and parts[1].lower() == 'xfs'
+    return ' '.join(parts), good
+
+
+def _quota_command(command: str) -> str:
+    """Only call this helper with fixed, read-only xfs_quota subcommands."""
+    if command not in ('state', 'dump -u', 'dump -p', 'report -p -n'):
+        raise ValueError('unsupported quota inventory command')
+    result = run(['xfs_quota', '-x', '-c', command, str(HOME_ROOT)])
+    if result is None or result.returncode != 0:
+        message = result.stderr.strip() if result else 'command unavailable/timed out'
+        raise ValueError(f'xfs_quota {command!r} failed: {message}')
+    return result.stdout
+
+
+def _quota_state() -> dict[str, tuple[bool, bool]]:
+    raw = _quota_command('state')
+    states = {}
+    for name in ('User', 'Group', 'Project'):
+        match = re.search(rf'^{name} quota state on [^\n]*\n(.*?)(?=^[A-Za-z]+ quota state on |\Z)',
+                          raw, re.MULTILINE | re.DOTALL)
+        if not match:
+            raise ValueError(f'{name} quota section unavailable')
+        body = match.group(1)
+        states[name] = ('Accounting: ON' in body, 'Enforcement: ON' in body)
+    return states
+
+
+def _quota_dump(command: str) -> dict[int, tuple[int, ...]]:
+    """Read XFS quota *limits* from the dump format, without modifying quotas.
+
+    xfs_quota may emit multiple `fs = DEVICE` section markers, even if the
+    command is scoped to a single filesystem.  Repeated identical markers
+    are valid; different devices or contradictory ID records are not.
+    """
+    out: dict[int, tuple[int, ...]] = {}
+    filesystem: str | None = None
+    for lineno, line in enumerate(_quota_command(command).splitlines(), 1):
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if re.match(r'^fs\s*=', line):
+            match = re.fullmatch(r'fs\s*=\s*(\S+)', line)
+            if not match:
+                raise ValueError(f'invalid {command} filesystem header on line {lineno}: {line[:100]}')
+            source = match.group(1)
+            if filesystem is None:
+                filesystem = source
+            elif source != filesystem:
+                raise ValueError(
+                    f'conflicting {command} filesystem header on line {lineno}: '
+                    f'{source!r} != {filesystem!r}'
+                )
+            # Identical `fs = DEVICE` markers may repeat between records.
+            continue
+        words = line.split()
+        if len(words) != 5 or not all(re.fullmatch(r'\d+', w) for w in words):
+            raise ValueError(f'unexpected {command} record on line {lineno}: {line[:100]}')
+        uid = int(words[0])
+        if uid in out:
+            raise ValueError(f'duplicate quota ID {uid} in {command} on line {lineno}')
+        out[uid] = tuple(int(w) for w in words[1:])
+    return out
+
+
+
+# All subcommands below are read-only; no deployment API is present.
+
+def shell_account(name: str) -> pwd.struct_passwd:
+    validate_name(name)
+    a = account(name)
+    if a is None or a.pw_dir != str(HOME_ROOT / name):
+        raise ValueError('user is not an existing /home/USERNAME shell account')
+    home = HOME_ROOT / name
+    st = home.lstat()
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != a.pw_uid:
+        raise ValueError('home is not a real directory owned by this shell UID')
+    return a
+
+
+def _service_properties(unit: str) -> dict[str, str] | None:
+    result = run(['systemctl', 'show', unit, '--no-pager',
+                  '--property=LoadState', '--property=ActiveState',
+                  '--property=User', '--property=Group',
+                  '--property=SupplementaryGroups', '--property=MainPID'])
+    if result is None or result.returncode != 0:
+        return None
+    return dict(line.split('=', 1) for line in result.stdout.splitlines() if '=' in line)
+
+
+def _legacy_fpm_matches(name: str) -> tuple[list[str], list[str]]:
+    matches = []
+    warnings = []
+    for path in sorted(Path('/etc/php').glob('*/fpm/pool.d/*.conf')):
+        if path.is_symlink():
+            warnings.append(f'SYMLINKED pool config (not followed): {path}')
+            continue
+        try:
+            st = path.lstat()
+            if st.st_uid != 0 or not stat.S_ISREG(st.st_mode) or st.st_mode & 0o022:
+                warnings.append(f'UNTRUSTED pool config: {path}')
+                continue
+            if st.st_size > 256 * 1024:
+                warnings.append(f'OVERSIZED pool config: {path}')
+                continue
+            data = _root_controlled_regular(path, 256 * 1024).decode('utf-8')
+            parser = configparser.ConfigParser(interpolation=None, strict=False)
+            parser.read_string(data)
+            reasons = []
+            if path.stem == name:
+                reasons.append('filename')
+            for section in parser.sections():
+                if section == 'global':
+                    continue
+                if parser[section].get('user', '').strip() == name:
+                    reasons.append(f'pool={section} user={name}')
+            if reasons:
+                matches.append(f'{path}: {", ".join(reasons)}')
+        except (OSError, UnicodeError, configparser.Error, ValueError) as exc:
+            warnings.append(f'Unreadable/unparseable pool {path}: {type(exc).__name__}')
+    return matches, warnings
+
+
+def _uid_quota(acct: pwd.struct_passwd) -> tuple[str, list[str]]:
+    warns = []
+    try:
+        mount, correct_fs = _quota_mount()
+        if not correct_fs:
+            return 'UNKNOWN (not confirmed mounted XFS /home)', [mount]
+        states = _quota_state()
+        if states.get('User') != (True, True):
+            warns.append('XFS user quota accounting/enforcement is not both ON')
+        limits = _quota_dump('dump -u')
+        fields = limits.get(acct.pw_uid)
+        if fields is None:
+            warns.append('No explicit user quota limit in dump (may be default/unlimited)')
+            return 'NO EXPLICIT LIMIT', warns
+        # XFS dump fields use 512-byte units, not KiB.
+        soft, hard, ino_soft, ino_hard = fields
+        readable = lambda n: f'{n * 512 / (1024**3):.3g} GiB' if n else 'unlimited'
+        return f'soft={readable(soft)}, hard={readable(hard)}; inode soft/hard={ino_soft}/{ino_hard}', warns
+    except (ValueError, OSError) as exc:
+        return 'UNKNOWN', [f'User quota inventory failed: {exc}']
+
+
+# CGI discovery extends the original _find_cgi_hints() scan rather than
+# introducing an independent, conflicting file-search algorithm.
+CGI_SCRIPT_SUFFIXES = frozenset({'.cgi', '.fcgi', '.py', '.pl', '.sh', '.lua'})
+CGI_NAMED_SUFFIXES = frozenset({'.cgi', '.fcgi'})
+CGI_MAX_SAMPLES = 16
+
+
+@dataclass(frozen=True)
+class CgiSiteInventory:
+    name: str
+    root: str
+    high_confidence: int
+    possible: int
+    needs_review: int
+    cgi_directories: int
+    hints: tuple[str, ...]
+    samples: tuple[str, ...]
+    issues: tuple[str, ...]
+    incomplete: bool = False
+    notes: tuple[str, ...] = ()
+    security_review: bool = False
+    informational_links: int = 0
+
+    @property
+    def candidates(self) -> int:
+        return self.high_confidence + self.possible + self.needs_review
+
+
+def _scan_cgi_site(acct: pwd.struct_passwd,
+                   max_entries: int = MAX_ENTRIES) -> CgiSiteInventory | None:
+    """Bounded read-only CGI discovery; no execution or HTTP request.
+
+    Internal directory links can be followed if their *resolved* target remains
+    inside this account's home and on the same filesystem. Outside-home links
+    are not followed. Findings are suggestions only, NEVER eligibility proof.
+    Limits and TOCTOU mean this is not an authorization/security scanner.
+    """
+    name = acct.pw_name
+    root = HOME_ROOT / name / 'public_html'
+    if acct.pw_dir != str(HOME_ROOT / name):
+        return None
+    try:
+        validate_name(name)
+    except ValueError:
+        return None
+
+    warnings: list[str] = []
+    hints: list[str] = []
+    samples: list[str] = []
+    high = possible = review = directories = 0
+    incomplete = False
+    security_review = False
+    info_links = 0
+    notes: list[str] = []
+
+    def warn(msg: str, *, security: bool = False) -> None:
+        """Keep safety warnings distinct from incomplete traversal."""
+        nonlocal incomplete, security_review
+        if security:
+            security_review = True
+        else:
+            incomplete = True
+        if msg not in warnings and len(warnings) < MAX_ISSUES:
+            warnings.append(msg)
+
+    def info_link(msg: str) -> None:
+        """Report a skipped non-CGI leaf, without claiming traversal failed."""
+        nonlocal info_links
+        info_links += 1
+        if len(notes) < MAX_ISSUES:
+            notes.append(msg)
+
+    def hint(msg: str) -> None:
+        if len(hints) < 30:
+            hints.append(msg)
+
+    def sample(msg: str) -> None:
+        if len(samples) < CGI_MAX_SAMPLES:
+            samples.append(msg)
+
+    def result() -> CgiSiteInventory:
+        return CgiSiteInventory(name, str(root), high, possible, review,
+                                directories, tuple(hints), tuple(samples),
+                                tuple(warnings), incomplete, tuple(notes),
+                                security_review, info_links)
+
+    home = HOME_ROOT / name
+    try:
+        hs = home.lstat()
+        if not stat.S_ISDIR(hs.st_mode) or hs.st_uid != acct.pw_uid:
+            warn('home is not a real directory owned by the shell UID')
+            return result()
+        rs = root.lstat()
+    except FileNotFoundError:
+        return None  # No public_html: normal for shell-only users.
+    except OSError as exc:
+        warn(f'cannot inspect home/webroot: {type(exc).__name__}')
+        return result()
+    if not (stat.S_ISDIR(rs.st_mode) or stat.S_ISLNK(rs.st_mode)):
+        warn('public_html is neither a directory nor a symlink')
+        return result()
+    if rs.st_uid != acct.pw_uid:
+        warn(f'public_html entry owned by UID {rs.st_uid}, not {acct.pw_uid}', security=True)
+    if stat.S_ISDIR(rs.st_mode) and rs.st_mode & 0o022:
+        warn(f'public_html group/other-writable ({stat.S_IMODE(rs.st_mode):04o})', security=True)
+    try:
+        canonical_home = home.resolve(strict=True)
+        canonical_root = root.resolve(strict=True)
+        if not _within(canonical_root, canonical_home):
+            warn('public_html resolves outside its own home; scan refused')
+            return result()
+        if not canonical_root.is_dir():
+            warn('public_html does not resolve to a directory')
+            return result()
+        if stat.S_ISLNK(rs.st_mode):
+            target_root_stat = canonical_root.stat()
+            if target_root_stat.st_uid != acct.pw_uid:
+                warn(f'public_html target owned by UID {target_root_stat.st_uid}, '
+                     f'not {acct.pw_uid}', security=True)
+            if target_root_stat.st_mode & 0o022:
+                warn(f'public_html target group/other-writable '
+                     f'({stat.S_IMODE(target_root_stat.st_mode):04o})', security=True)
+    except (OSError, RuntimeError) as exc:
+        warn(f'cannot resolve public_html: {type(exc).__name__}')
+        return result()
+
+    queue = deque([(canonical_root, 0, False)])
+    seen: set[tuple[int, int]] = set()
+    inspected = 0
+    while queue:
+        directory, depth, in_cgi_bin = queue.popleft()
+        if depth > MAX_DEPTH or len(seen) >= MAX_DIRS:
+            warn(f'CGI scan reached depth/directory budget ({MAX_DEPTH}/{MAX_DIRS})')
+            break
+        try:
+            ds = directory.stat()
+            if not stat.S_ISDIR(ds.st_mode):
+                warn(f'non-directory scan target: {directory}')
+                continue
+            if ds.st_dev != hs.st_dev or not _within(directory.resolve(strict=True), canonical_home):
+                warn(f'foreign/outside-home directory skipped: {directory}')
+                continue
+            key = (ds.st_dev, ds.st_ino)
+            if key in seen:
+                continue
+            seen.add(key)
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    inspected += 1
+                    if inspected > max_entries:
+                        warn(f'CGI scan exceeded {max_entries} entries')
+                        return result()
+                    path = Path(entry.path)
+                    try:
+                        st = entry.stat(follow_symlinks=False)
+                    except OSError as exc:
+                        warn(f'cannot stat {path}: {type(exc).__name__}')
+                        continue
+                    is_link = stat.S_ISLNK(st.st_mode)
+                    if is_link:
+                        # Never traverse outside the account home or to another
+                        # filesystem. External non-CGI file links (e.g. downloads
+                        # and venv interpreter links) are only informational.
+                        # External directory/CGI-looking links remain incomplete.
+                        suffix = path.suffix.lower()
+                        cgi_looking = (in_cgi_bin or entry.name.lower() == 'cgi-bin'
+                                       or suffix in CGI_SCRIPT_SUFFIXES)
+                        try:
+                            target = path.resolve(strict=True)
+                            target_stat = target.stat()
+                            external = not _within(target, canonical_home)
+                            foreign_fs = target_stat.st_dev != hs.st_dev
+                            if external or foreign_fs:
+                                why = 'outside-home' if external else 'cross-filesystem'
+                                if (stat.S_ISDIR(target_stat.st_mode) or
+                                        (cgi_looking and stat.S_ISREG(target_stat.st_mode)
+                                         and bool(target_stat.st_mode & 0o111))):
+                                    warn(f'{why} CGI/directory symlink skipped: {path}')
+                                else:
+                                    info_link(f'{why} non-CGI file symlink skipped: {path}')
+                                continue
+                            if stat.S_ISDIR(target_stat.st_mode):
+                                queue.append((target, depth + 1, in_cgi_bin or entry.name.lower() == 'cgi-bin'))
+                                if entry.name.lower() == 'cgi-bin':
+                                    directories += 1
+                                    hint(f'cgi-bin directory symlink: {path} -> {target}')
+                                continue
+                            if not stat.S_ISREG(target_stat.st_mode):
+                                continue
+                            st = target_stat
+                        except (OSError, RuntimeError) as exc:
+                            if cgi_looking:
+                                warn(f'unresolvable CGI-like symlink: {path} ({type(exc).__name__})')
+                            else:
+                                info_link(f'unresolvable non-CGI symlink: {path} ({type(exc).__name__})')
+                            continue
+                    if stat.S_ISDIR(st.st_mode):
+                        if entry.name.lower() == 'cgi-bin':
+                            directories += 1
+                            hint(f'cgi-bin directory: {path}')
+                        queue.append((path, depth + 1, in_cgi_bin or entry.name.lower() == 'cgi-bin'))
+                        continue
+                    if not stat.S_ISREG(st.st_mode):
+                        continue
+
+                    suffix = path.suffix.lower()
+                    within_cgi_dir = in_cgi_bin
+                    executable = bool(st.st_mode & 0o111)
+                    if not (suffix in CGI_SCRIPT_SUFFIXES or (within_cgi_dir and executable)):
+                        continue
+                    if not executable:
+                        # Non-executable scripts are not counted as active CGI.
+                        if within_cgi_dir or suffix in CGI_NAMED_SUFFIXES:
+                            sample(f'NONEXECUTABLE {path}')
+                        continue
+
+                    if is_link or st.st_uid != acct.pw_uid or st.st_mode & 0o022 or st.st_dev != hs.st_dev:
+                        review += 1
+                        reasons = []
+                        if is_link:
+                            reasons.append('symlink')
+                        if st.st_uid != acct.pw_uid:
+                            reasons.append(f'owner UID {st.st_uid}')
+                        if st.st_mode & 0o022:
+                            reasons.append(f'writable by group/other ({stat.S_IMODE(st.st_mode):04o})')
+                        if st.st_dev != hs.st_dev:
+                            reasons.append('foreign filesystem')
+                        sample(f'REVIEW {path} ({", ".join(reasons)})')
+                        warn(f'CGI candidate needs review: {path} ({", ".join(reasons)})', security=True)
+                    elif within_cgi_dir or suffix in CGI_NAMED_SUFFIXES:
+                        high += 1
+                        sample(f'CGI-NAMED {path}')
+                    else:
+                        possible += 1
+                        sample(f'POSSIBLE {path}')
+                    if within_cgi_dir or suffix in CGI_NAMED_SUFFIXES:
+                        hint(f'CGI candidate: {path}')
+                    else:
+                        hint(f'POSSIBLE CGI candidate: {path}')
+        except (OSError, RuntimeError) as exc:
+            warn(f'cannot scan {directory}: {type(exc).__name__}')
+    return result()
+
+
+def _find_cgi_hints(acct: pwd.struct_passwd,
+                    max_entries: int = MAX_ENTRIES) -> tuple[list[str], list[str]]:
+    """Existing cgi-audit API backed by the shared structured CGI scanner."""
+    site = _scan_cgi_site(acct, max_entries=max_entries)
+    return (list(site.hints), list(site.issues)) if site else ([], [])
+
+
+def cgi_inventory(only_user: str | None = None, *, summary: bool = False,
+                  as_json: bool = False, php_classes: dict[str, str] | None = None) -> int:
+    """CGI-only or combined PHP/CGI inventory; never provisions anything."""
+    if only_user is not None:
+        validate_name(only_user)
+        acct = account(only_user)
+        if acct is None or acct.pw_dir != str(HOME_ROOT / only_user):
+            raise ValueError(f'{only_user!r} is not a regular /home shell account')
+        accounts = [acct]
+    else:
+        accounts = sorted(pwd.getpwall(), key=lambda a: a.pw_name)
+
+    # One trusted map parse for the entire inventory, not 1500 systemctl calls.
+    entries: dict[str, str] = {}
+    map_error = None
+    try:
+        _, raw, _ = _cgi_map_read()
+        _, entries, _ = _cgi_map_parse(raw)
+    except (OSError, ValueError, UnicodeError) as exc:
+        map_error = f'{type(exc).__name__}: {exc}'
+
+    rows = []
+    accounts_scanned = 0
+    missing_webroots = 0
+    scanned_incomplete = 0
+    scanned_security = 0
+    scanned_unsafe_or_incomplete = 0
+    info_links_total = 0
+    matched_users = 0
+    total_files = high = possible = review = routed = staged = 0
+    for acct in accounts:
+        if acct.pw_dir != str(HOME_ROOT / acct.pw_name):
+            continue
+        accounts_scanned += 1
+        try:
+            validate_name(acct.pw_name)
+        except ValueError as exc:
+            scanned_incomplete += 1
+            scanned_unsafe_or_incomplete += 1
+            matched_users += 1
+            rows.append({
+                'user': acct.pw_name, 'uid': acct.pw_uid, 'gid': acct.pw_gid,
+                'root': str(HOME_ROOT / acct.pw_name / 'public_html'),
+                'cgi_files': 0, 'cgi_named': 0, 'possible_cgi': 0,
+                'needs_review': 0, 'cgi_dirs': 0, 'nginx': 'UNKNOWN',
+                'units': 'UNSUPPORTED USERNAME', 'php': None,
+                'incomplete': True, 'security_review': False,
+                'informational_links': 0, 'notes': [],
+                'samples': [], 'issues': [str(exc)],
+            })
+            continue
+        site = _scan_cgi_site(acct)
+        if site is None:
+            missing_webroots += 1
+            # Still report routed accounts that have no public_html.
+            site = CgiSiteInventory(acct.pw_name, str(HOME_ROOT / acct.pw_name / 'public_html'),
+                                    0, 0, 0, 0, (), (), ())
+        if site.incomplete:
+            scanned_incomplete += 1
+        if site.security_review:
+            scanned_security += 1
+        if site.incomplete or site.security_review:
+            scanned_unsafe_or_incomplete += 1
+        info_links_total += site.informational_links
+        mapped = acct.pw_name in entries
+        svc, sock, svc_file, sock_file, _ = _cgi_units(acct.pw_name)
+        files_present = os.path.lexists(svc_file) or os.path.lexists(sock_file)
+        installation = 'NOT INSTALLED'
+        if files_present:
+            try:
+                workers = _cgi_installed_workers(acct.pw_name)
+                installation = f'REVIEWED ({workers} worker(s))' if workers else 'NOT INSTALLED'
+            except (OSError, ValueError) as exc:
+                installation = f'UNVERIFIED ({type(exc).__name__})'
+        if mapped:
+            routed += 1
+        elif files_present:
+            staged += 1
+        if not (site.candidates or site.issues or site.notes or site.cgi_directories or mapped or files_present):
+            continue
+        matched_users += 1
+        high += site.high_confidence
+        possible += site.possible
+        review += site.needs_review
+        total_files += site.candidates
+        rows.append({
+            'user': acct.pw_name,
+            'uid': acct.pw_uid,
+            'gid': acct.pw_gid,
+            'root': site.root,
+            'cgi_files': site.candidates,
+            'cgi_named': site.high_confidence,
+            'possible_cgi': site.possible,
+            'needs_review': site.needs_review,
+            'cgi_dirs': site.cgi_directories,
+            'nginx': 'UNKNOWN' if map_error else ('ROUTED' if mapped else 'SHARED'),
+            'units': installation,
+            'php': php_classes.get(acct.pw_name, 'NO PHP') if php_classes is not None else None,
+            'incomplete': site.incomplete,
+            'security_review': site.security_review,
+            'informational_links': site.informational_links,
+            'notes': list(site.notes),
+            'samples': list(site.samples),
+            'issues': list(site.issues),
+        })
+
+    if map_error:
+        # Without trusted map, routing classifications are unknown.
+        routed = 0
+        staged = 0
+    totals = {
+        'shell_accounts_scanned': accounts_scanned,
+        'without_public_html': missing_webroots,
+        'accounts_with_findings_or_managed_units': matched_users,
+        'accounts_with_executable_cgi_candidates': sum(r['cgi_files'] > 0 for r in rows),
+        'executable_cgi_candidates': total_files,
+        'cgi_named_or_inside_cgi_bin': high,
+        'possible_scripts_outside_cgi_bin': possible,
+        'candidates_requiring_review': review,
+        'scans_incomplete_or_unsafe': scanned_unsafe_or_incomplete,
+        'scans_incomplete': scanned_incomplete,
+        'accounts_with_security_findings': scanned_security,
+        'skipped_non_cgi_symlinks': info_links_total,
+        'nginx_map_routed_accounts': routed if not map_error else None,
+        'unrouted_accounts_with_cgi_units': staged if not map_error else None,
+    }
+    if as_json:
+        print(json.dumps({'schema_version': 2, 'read_only': True,
+                          'nginx_map_error': map_error, 'summary': totals,
+                          'accounts': rows}, indent=2, ensure_ascii=False))
+        return 0 if not map_error and not scanned_unsafe_or_incomplete else 1
+
+    print('=== CGI inventory: /home/USER/public_html (READ ONLY) ===')
+    if not summary:
+        for r in rows:
+            print(f'{r["user"]:<24} files={r["cgi_files"]:<5} '
+                  f'cgi-named={r["cgi_named"]:<4} possible={r["possible_cgi"]:<4} '
+                  f'review={r["needs_review"]:<4} '
+                  f'nginx={r["nginx"]:<7} units={r["units"]}'
+                  + (f' PHP={r["php"]}' if php_classes is not None else ''))
+            for line in r['samples']:
+                print(f'  + {line}')
+            for line in r['issues']:
+                print(f'  ! {line}')
+            for line in r['notes']:
+                print(f'  ~ {line}')
+            if r['informational_links'] > len(r['notes']):
+                print(f'  ~ and {r["informational_links"] - len(r["notes"])} more non-CGI links')
+            if r['incomplete'] and not r['issues']:
+                print('  ! scan incomplete')
+    print('\n=== CGI SUMMARY ===')
+    for label, number in totals.items():
+        print(f'  {label}: {number if number is not None else "UNKNOWN"}')
+    if map_error:
+        print(f'WARN: Cannot trust CGI nginx map: {map_error}')
+    print('NO CHANGES MADE. Found executables are NOT proof of HTTP CGI reachability.')
+    print('NOTE: scan is bounded; outside-home symlinks are never traversed.')
+    print('NOTE: nginx routing state comes from map, NOT live service verification.')
+    if scanned_incomplete:
+        print('WARN: At least one scan is incomplete; candidate totals are lower bounds.')
+    if scanned_security:
+        print('WARN: Security findings require review independently of scan completeness.')
+    return 0 if not map_error and not scanned_unsafe_or_incomplete else 1
+
+
+def _unit_summary(unit: str) -> str:
+    vals = _service_properties(unit)
+    if not vals:
+        return 'UNKNOWN (could not query systemd)'
+    return (f'{vals.get("LoadState", "unknown")}/{vals.get("ActiveState", "unknown")}'
+            f' User={vals.get("User", "") or "unset"}')
+
+
+def isolation_plan(name: str) -> int:
+    """READ ONLY: production model proposal, not a deployment confirmation."""
+    a = shell_account(name)
+    eligible, review, template_only, _, missing = discover_sites(name)
+    print(f'=== PHP/CGI inter-user isolation PLAN: {name} (READ ONLY) ===')
+    print(f'Shell UID/GID        : {a.pw_uid}/{a.pw_gid}')
+    print(f'Home                 : {a.pw_dir}')
+    groups = sorted(set(os.getgrouplist(name, a.pw_gid)))
+    print(f'Shell supplementary GIDs: {groups}')
+    print('PHP execution UID    : SAME AS SHELL UID (no envs-php-USER account)')
+    print('Quota strategy       : existing XFS USER quota; NO project quota required')
+    quota, quota_warns = _uid_quota(a)
+    print(f'User quota           : {quota}')
+    for warning in quota_warns: print(f'QUOTA WARNING        : {warning}')
+    discovered = eligible + review + template_only
+    site = discovered[0] if discovered else None
+    classification = ('CUSTOM PHP / candidate' if eligible else 'REVIEW' if review
+                      else 'TEMPLATE ONLY' if template_only else 'NO PHP DETECTED')
+    print(f'PHP discovery        : {classification}')
+    if site:
+        print(f'Webroot              : {site.root}')
+        print(f'Resolved webroot     : {site.resolved_root}')
+        print(f'PHP files            : {site.php_count} (bootstrap templates: {site.bootstrap_count})')
+        for note in site.notes: print(f'  NOTE               : {note}')
+        for issue in site.issues: print(f'  REVIEW             : {issue}')
+    else:
+        print('No custom PHP found or no public_html directory exists.')
+    try:
+        gidname = grp.getgrgid(a.pw_gid).gr_name
+    except KeyError:
+        gidname = f'#{a.pw_gid}'
+    if gidname == 'envs':
+        print('GROUP WARNING        : primary group envs is shared across users.')
+        print("                       PHP must not see other users\' home directories or unrestricted shared paths.")
+    print('\n--- Intended isolation ---')
+    print('Systemd service      : one instance per shell user; User=USERNAME')
+    print('FastCGI socket       : systemd-owned root:envs-web 0660 (never user-writable)')
+    print('Mount namespace      : hide other homes with ProtectHome=tmpfs;')
+    print('                       bind ONLY own home at original /home/USERNAME path')
+    print('Filesystem           : ProtectSystem=strict, explicit per-user write access')
+    print('FastCGI SCRIPT_FILENAME: /home/USERNAME/public_html/<validated PHP path>')
+    print("User PHP/CGI files   : may access user\'s own shell files (accepted tradeoff)")
+    print('Default-template     : keep shared root-controlled renderer for template-only sites')
+    print('Legacy CGI           : shared fcgiwrap needs separate per-user execution design')
+    print('\n--- Existing service state ---')
+    for unit in (f'envs-php-activation@{name}.service', f'envs-php-activation@{name}.socket',
+                 'php8.4-fpm.service', 'fcgiwrap.service', 'fcgiwrap.socket'):
+        print(f'{unit:<36}: {_unit_summary(unit)}')
+    for path in (STAGED_SERVICE, STAGED_SOCKET):
+        print(f'Staged template      : {path} (exists={path.is_file()})')
+    if STAGED_SERVICE.is_file():
+        try:
+            raw = _root_controlled_regular(STAGED_SERVICE, 256 * 1024).decode('utf-8')
+            if 'User=envs-php-%i' in raw:
+                print('TEMPLATE BLOCKER     : existing STAGED unit uses separate envs-php-UID; do not deploy unchanged')
+            else:
+                print('TEMPLATE REVIEW      : staged service credentials require manual inspection')
+        except (OSError, ValueError, UnicodeError):
+            print('TEMPLATE BLOCKER     : unable to trust staged systemd service template')
+    matches, warnings = _legacy_fpm_matches(name)
+    for match in matches: print(f'LEGACY POOL          : {match}')
+    for warning in warnings[:10]: print(f'POOL WARNING         : {warning}')
+    hints, issues = _find_cgi_hints(a)
+    print(f'CGI filesystem hints : {len(hints)}')
+    for hint in hints[:10]: print(f'  {hint}')
+    for issue in issues[:10]: print(f'CGI WARNING          : {issue}')
+    print('\n--- Blocking work for production ---')
+    print('1. Build and test a NEW shell-UID service template; do not rename the running probe.')
+    print('2. Prove mount namespace exposes own home only, even via symlinks and shared group envs.')
+    print('3. Test script routing for subdomains, /~USER, /u/USER, custom domains and BasicAuth.')
+    print('4. Keep unknown PHP users and CGI paths on existing service until explicitly migrated.')
+    print('5. Implement/verify per-user CGI dispatch; shared fcgiwrap is not a UID boundary.')
+    print('6. Prevent nginx serving/executing uploads unexpectedly; check PHP socket policy.')
+    print('RESULT: DESIGN/INVENTORY ONLY. NO FILES, ACCOUNTS, QUOTAS OR SERVICES CHANGED.')
+    return 0
+
+
+
+def sync_preview(only_user: str | None) -> int:
+    eligible, review, template_only, total, none = discover_sites(only_user)
+    print('=== Shell-UID PHP-FPM provisioning candidates (DRY RUN) ===')
+    for site in eligible:
+        print(f'WOULD REVIEW / ENROLL {site.name:<24} {site.php_count} PHP paths')
+    print_sites(review, 'REVIEW')
+    if only_user:
+        print_sites(template_only, 'TEMPLATE ONLY')
+    print(f'Scanned={total}; PHP candidates={len(eligible)}; review={len(review)}; '
+          f'template-only={len(template_only)}; no PHP={none}')
+    print('PHP UID = existing shell UID; use USER quota; no project ID or new account.')
+    print('NO ACTION. No production shell-UID FPM templates have been deployed.')
+    return 0
+
+
+
+# v18.1: offline rendering only; /root ancestor may be non-world-writable 0750/0755. These are NOT production-deployable without
+# checking existing routes, compatibility, filesystem visibility and CGI.
+STAGE_ROOT = Path('/root/envs-php-user-review-v18')
+
+
+def _new_php_service_template(*, draft: bool = False) -> str:
+    template = """# envs.net v18 DRAFT — DO NOT INSTALL/ENABLE WITHOUT REVIEW.
+# Separate name: deliberately does not touch envs-php-shell@ (test).
+[Unit]
+Description=envs.net PHP-FPM for existing shell UID %i (REVIEW REQUIRED)
+After=local-fs.target
+RequiresMountsFor=/home/%i
+AssertPathExists=/etc/envs/php-fpm/user-%i.conf
+AssertPathExists=/etc/envs/php-fpm/user-%i.allow
+
+[Service]
+Type=exec
+User=%i
+# NSS primary and supplementary groups remain; mount isolation is essential.
+Environment=FPM_SOCKETS=/run/envs-php-user-%i/php.sock=3
+ExecStart=/usr/sbin/php-fpm8.4 -F -O -y /etc/envs/php-fpm/user-%i.conf
+RuntimeDirectory=envs-php-user-master-%i
+RuntimeDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=tmpfs
+# Only the matching existing home becomes visible and writable in this namespace.
+BindPaths=/home/%i:/home/%i
+ReadWritePaths=/home/%i
+# Hide shared service/user data; test app-specific dependencies before activation.
+TemporaryFileSystem=/srv:ro
+TemporaryFileSystem=/var/www:ro
+TemporaryFileSystem=/tmp:rw,nosuid,nodev,size=64M,mode=1777
+TemporaryFileSystem=/var/tmp:rw,nosuid,nodev,size=32M,mode=1777
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+# HTTP clients inside PHP often require outbound network access.
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+MemoryMax=256M
+TasksMax=32
+LimitNOFILE=4096
+KillSignal=SIGQUIT
+TimeoutStopSec=30s
+# Intentionally no [Install], no Restart=. Requires reviewed explicit socket start.
+"""
+    if draft:
+        return template
+    return (template.replace(
+        '# envs.net v18 DRAFT — DO NOT INSTALL/ENABLE WITHOUT REVIEW.',
+        '# envs.net managed per-user PHP-FPM service template.', 1
+    ).replace(
+        'Description=envs.net PHP-FPM for existing shell UID %i (REVIEW REQUIRED)',
+        'Description=envs.net isolated PHP-FPM for shell user %i', 1
+    ).replace(
+        '# Intentionally no [Install], no Restart=. Requires reviewed explicit socket start.',
+        '# Intentionally no [Install] or Restart; started by the per-user socket.', 1
+    ))
+
+
+def _new_php_socket_template(*, draft: bool = False) -> str:
+    template = """# envs.net v18 DRAFT — no [Install]; explicit reviewed use only.
+[Unit]
+Description=envs.net user PHP-FPM socket %i (REVIEW REQUIRED)
+AssertPathExists=/etc/envs/php-fpm/user-%i.conf
+AssertPathExists=/etc/envs/php-fpm/user-%i.allow
+
+[Socket]
+ListenStream=/run/envs-php-user-%i/php.sock
+Accept=no
+SocketUser=root
+SocketGroup=envs-web
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+# No [Install]. Verify that no shell user is a member of envs-web.
+"""
+    if draft:
+        return template
+    return (template.replace(
+        '# envs.net v18 DRAFT — no [Install]; explicit reviewed use only.',
+        '# envs.net managed per-user PHP-FPM socket template.', 1
+    ).replace(
+        'Description=envs.net user PHP-FPM socket %i (REVIEW REQUIRED)',
+        'Description=envs.net user PHP-FPM socket %i', 1
+    ))
+
+
+def _new_php_pool(name: str, *, draft: bool = False) -> str:
+    validate_name(name)
+    header = (f'; envs.net v18 DRAFT for {name} — do not deploy without review.\n'
+              if draft else
+              '; envs.net managed per-user PHP-FPM configuration.\n'
+              '; Managed automatically; manual changes may be overwritten.\n')
+    return f"""{header}; Master and workers inherit systemd User={name}; no separate PHP UID.
+[global]
+pid = /run/envs-php-user-master-{name}/php-fpm.pid
+error_log = syslog
+syslog.ident = envs-php-user-{name}
+daemonize = no
+process.max = 2
+
+[web]
+listen = /run/envs-php-user-{name}/php.sock
+pm = ondemand
+pm.max_children = 2
+pm.process_idle_timeout = 10s
+pm.max_requests = 200
+security.limit_extensions = .php
+clear_env = yes
+; Defense in depth only, not a security boundary by itself.
+php_admin_value[open_basedir] = /home/{name}:/tmp:/var/tmp:/usr/share/php
+php_admin_value[memory_limit] = 128M
+php_admin_value[display_errors] = Off
+php_admin_value[session.save_path] = /tmp
+php_admin_value[upload_tmp_dir] = /tmp
+catch_workers_output = yes
+"""
+
+
+def _trusted_stage_parent(path: Path, *, require_private: bool = True) -> None:
+    """Validate a root-owned real directory without following symlinks.
+
+    /root is a trusted ancestor, not the private staging directory itself:
+    common modes 0700, 0750 and 0755 are safe if it is root-owned and
+    *not writable* by group/others. Newly created staging directories must
+    still be root-private (0700, no group/other access).
+    """
+    st = path.lstat()
+    forbidden = 0o077 if require_private else 0o022
+    if not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_mode & forbidden:
+        requirement = 'private root-owned (0700)' if require_private else 'root-owned and non-writable by others'
+        raise ValueError(f'unsafe staging path {path}: must be a real {requirement} directory')
+
+
+def _write_new_stage_file(path: Path, content: str) -> None:
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        data = content.encode('utf-8')
+        with os.fdopen(fd, 'wb', closefd=False) as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def stage_shell_uid(name: str) -> int:
+    """Generate offline REVIEW artifacts only; never write to /etc, /home or run services."""
+    if os.geteuid() != 0:
+        raise ValueError('staging requires root (root-private output under /root)')
+    a = shell_account(name)
+    hs = (HOME_ROOT / name).lstat()
+    if hs.st_mode & 0o022:
+        raise ValueError('home is group/other writable; manual review required')
+    home_root = HOME_ROOT.lstat()
+    if (not stat.S_ISDIR(home_root.st_mode) or home_root.st_uid != 0
+            or home_root.st_mode & 0o022):
+        raise ValueError('/home must be a trusted root-owned non-symlink directory')
+    mount, correct = _quota_mount()
+    if not correct:
+        raise ValueError(f'/home is not the expected XFS mount: {mount}')
+    states = _quota_state()
+    if states.get('User') != (True, True):
+        raise ValueError('XFS user quota accounting AND enforcement must be ON')
+    templates, _, _ = load_template_hashes()
+    site = inspect_site(a, templates)
+    if (site is None or site.php_count == 0 or site.php_count == site.bootstrap_count
+            or site.issues or site.incomplete):
+        raise ValueError('site not a clean CUSTOM PHP candidate; run plan/discover first')
+    pools, pool_warnings = _legacy_fpm_matches(name)
+    if pools or pool_warnings:
+        raise ValueError('legacy FPM inventory not clean: ' + '; '.join((pools + pool_warnings)[:3]))
+    # Staging does not issue a live deployment decision or write an allow marker.
+    root = Path('/root')
+    _trusted_stage_parent(root, require_private=False)
+    try:
+        os.mkdir(STAGE_ROOT, mode=0o700)
+    except FileExistsError:
+        pass
+    _trusted_stage_parent(STAGE_ROOT)
+    user_stage = STAGE_ROOT / name
+    # Explicit no-overwrite: even an interrupted run demands operator review.
+    os.mkdir(user_stage, mode=0o700)
+    _trusted_stage_parent(user_stage)
+    outputs = {
+        'envs-php-user@.service': _new_php_service_template(draft=True),
+        'envs-php-user@.socket': _new_php_socket_template(draft=True),
+        f'user-{name}.conf': _new_php_pool(name, draft=True),
+        'REVIEW.txt': f"""envs.net v18 OFFLINE PHP-FPM REVIEW for {name}
+Shell UID/GID: {a.pw_uid}/{a.pw_gid}
+Home: /home/{name}
+Webroot (NOT a deployment entitlement): {site.root}
+Resolved webroot: {site.resolved_root}
+PHP paths observed: {site.php_count}
+
+NO CONFIGURATION HAS BEEN INSTALLED. No processes or websites were changed.
+These files contain a TEMPLATE and USER CONFIG DRAFT, not an approved rollout.
+No user-{name}.allow authorization marker is generated.
+
+BEFORE ANY INSTALLATION:
+- Verify all systemd directives in a separate lab, including bind-mount behavior,
+  socket activation and actual PHP writes under this user's XFS UID quota.
+- Inventory ALL CGI and HTTP routes; review custom domains/BasicAuth.
+- Check shared-group envs, symlink races and access to /srv, /var and /run.
+- Check site dependencies on shared paths, writable assets, outbound networking,
+  session directories and the restrictive default UMask=0077.
+- Verify per-user nginx route mapping is fail-closed; shared php8.4-fpm/fcgiwrap
+  remain in production until specifically audited and migrated.
+- Root must explicitly create user-{name}.allow only after all reviews.
+- Do not overwrite the working envs-php-shell@ TEST template.
+- The existing /etc/skel historical PHP templates keep their shared renderer.
+
+NO nginx snippet is generated: live nginx routing requires its own audit.
+NO CGI isolation is claimed.
+""",
+    }
+    for filename, value in outputs.items():
+        _write_new_stage_file(user_stage / filename, value)
+    dirfd = os.open(user_stage, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(dirfd)
+    finally:
+        os.close(dirfd)
+    print(f'OFFLINE REVIEW GENERATED: {user_stage}')
+    print(f'User identity: {name} UID={a.pw_uid} GID={a.pw_gid}')
+    print(f'PHP paths: {site.php_count}; existing user quota remains unchanged')
+    for filename in outputs:
+        print(f'  {user_stage / filename}')
+    print('NO /etc installation, no nginx, accounts, quotas, sockets or services changed.')
+    print('NO .allow activation marker created. REVIEW.txt describes deployment blockers.')
+    return 0
+
+
+# v19: guarded production installation; NO nginx route switching or CGI dispatch.
+USER_SERVICE_NAME = 'envs-php-user@.service'
+USER_SOCKET_NAME = 'envs-php-user@.socket'
+SYSTEMD_DIR = Path('/etc/systemd/system')
+MANAGED_DIR = Path('/etc/envs/php-fpm')
+MANAGER_LOCK = Path('/run/envs-php-user-manage.lock')
+
+
+def _admin_dir(path: Path, private: bool = False) -> None:
+    """Check every existing ancestor from /, without following any symlink."""
+    path = Path(path)
+    if not path.is_absolute():
+        raise ValueError(f'not an absolute admin path: {path}')
+    nodes = [Path('/')]
+    current = Path('/')
+    for component in path.parts[1:]:
+        current = current / component
+        nodes.append(current)
+    for node in nodes:
+        st = node.lstat()
+        if not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or st.st_mode & 0o022:
+            raise ValueError(f'unsafe administrative directory: {node}')
+    if private and nodes[-1].lstat().st_mode & 0o077:
+        raise ValueError(f'admin path must be private (0700): {path}')
+
+
+def _strict_file(path: Path, *, max_bytes: int = 256 * 1024,
+                 allowed_modes: tuple[int, ...] = (0o600, 0o644, 0o640, 0o440, 0o444)) -> bytes:
+    """Read a root-controlled regular file with no symlink leaf."""
+    _admin_dir(path.parent)
+    fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_nlink != 1:
+            raise ValueError(f'untrusted admin file: {path}')
+        if stat.S_IMODE(st.st_mode) not in allowed_modes:
+            raise ValueError(f'unexpected file mode on {path}: {stat.S_IMODE(st.st_mode):04o}')
+        if st.st_size > max_bytes:
+            raise ValueError(f'oversized admin file: {path}')
+        data = os.read(fd, max_bytes + 1)
+        if len(data) > max_bytes:
+            raise ValueError(f'oversized admin file: {path}')
+        return data
+    finally:
+        os.close(fd)
+
+
+@contextlib.contextmanager
+def _manager_lock():
+    if os.geteuid() != 0:
+        raise ValueError('only root may manage PHP-FPM instances')
+    _admin_dir(MANAGER_LOCK.parent)
+    fd = os.open(MANAGER_LOCK, os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+    try:
+        st = os.fstat(fd)
+        if not stat.S_ISREG(st.st_mode) or st.st_uid != 0 or st.st_nlink != 1 or stat.S_IMODE(st.st_mode) != 0o600:
+            raise ValueError('unsafe PHP-FPM management lock')
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        yield
+    finally:
+        os.close(fd)
+
+
+def _wanted_files(name: str) -> dict[Path, bytes]:
+    return {
+        SYSTEMD_DIR / USER_SERVICE_NAME: _new_php_service_template().encode('utf-8'),
+        SYSTEMD_DIR / USER_SOCKET_NAME: _new_php_socket_template().encode('utf-8'),
+        MANAGED_DIR / f'user-{name}.conf': _new_php_pool(name).encode('utf-8'),
+    }
+
+
+def _preflight_base(name: str) -> pwd.struct_passwd:
+    a = shell_account(name)
+    if os.geteuid() != 0:
+        raise ValueError('only root can install/manage services')
+    _admin_dir(HOME_ROOT)
+    _admin_dir(SYSTEMD_DIR)
+    _admin_dir(MANAGED_DIR)
+    # PHP-FPM runs as the shell UID, not root: it must traverse these
+    # root-owned directories to read its world-readable, non-secret pool.
+    for path in (MANAGED_DIR.parent, MANAGED_DIR):
+        if not path.lstat().st_mode & 0o001:
+            raise ValueError(f'PHP UID cannot traverse {path}; review directory permissions/ACLs')
+    h = (HOME_ROOT / name).lstat()
+    if h.st_mode & 0o022:
+        raise ValueError(f'home is group/other-writable: {HOME_ROOT / name}')
+    quotas, correct_fs = _quota_mount()
+    if not correct_fs or _quota_state().get('User') != (True, True):
+        raise ValueError(f'/home XFS user quota accounting/enforcement not verified: {quotas}')
+    # Never grant a normal shell user the FPM socket access group.
+    g = grp.getgrnam(WEB_USER).gr_gid
+    if g in os.getgrouplist(name, a.pw_gid):
+        raise ValueError(f'PHP shell user belongs to socket access group {WEB_USER}')
+    return a
+
+
+def _check_staged(name: str, acct: pwd.struct_passwd) -> None:
+    stage = STAGE_ROOT / name
+    _admin_dir(stage, private=True)
+    for filename, expected in ((USER_SERVICE_NAME, _new_php_service_template(draft=True)),
+                               (USER_SOCKET_NAME, _new_php_socket_template(draft=True)),
+                               (f'user-{name}.conf', _new_php_pool(name, draft=True))):
+        actual = _strict_file(stage / filename, allowed_modes=(0o600,))
+        if actual != expected.encode('utf-8'):
+            raise ValueError(f'staged file differs from v19 expected template: {filename}')
+    review = _strict_file(stage / 'REVIEW.txt', allowed_modes=(0o600,)).decode('utf-8')
+    for line in (f'envs.net v18 OFFLINE PHP-FPM REVIEW for {name}',
+                 f'Shell UID/GID: {acct.pw_uid}/{acct.pw_gid}',
+                 f'Home: /home/{name}'):
+        if line not in review.splitlines():
+            raise ValueError(f'staged review baseline does not match current user: {line}')
+
+
+def _check_installed(name: str, *, require_pool: bool = True) -> None:
+    _admin_dir(SYSTEMD_DIR)
+    _admin_dir(MANAGED_DIR)
+    for path, expected in _wanted_files(name).items():
+        if not require_pool and path.name.startswith('user-'):
+            continue
+        if _strict_file(path, allowed_modes=(0o644,)) != expected:
+            raise ValueError(f'installed config differs from managed template: {path}')
+
+
+def _atomic_new_file(path: Path, payload: bytes, mode: int = 0o644) -> None:
+    """Create a NEW file only, without overwrite or symlink-following."""
+    _admin_dir(path.parent)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC, mode)
+    try:
+        # umask may reduce mode, so force the exact safe mode on the owned fd.
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, 'wb', closefd=False) as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(fd)
+    except BaseException:
+        os.close(fd)
+        path.unlink()  # this attempt exclusively created the file
+        _sync_dir(path.parent)
+        raise
+    else:
+        os.close(fd)
+    _sync_dir(path.parent)
+
+
+def _sync_dir(path: Path) -> None:
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def _installed_status(name: str) -> None:
+    print(f'=== PHP-FPM shell-UID manager v20.1 STATUS: {name} ===')
+    for path in _wanted_files(name):
+        try:
+            value = _strict_file(path, allowed_modes=(0o644,))
+            good = value == _wanted_files(name)[path]
+            print(f'  {path}: {"MATCH" if good else "MISMATCH"}')
+        except FileNotFoundError:
+            print(f'  {path}: NOT INSTALLED')
+        except (OSError, ValueError) as exc:
+            print(f'  {path}: UNSAFE ({exc})')
+    marker = MANAGED_DIR / f'user-{name}.allow'
+    try:
+        data = _strict_file(marker, allowed_modes=(0o644,))
+        print(f'  activation marker: {"PRESENT" if data == _marker_bytes(name) else "INVALID CONTENT"}')
+    except FileNotFoundError:
+        print('  activation marker: ABSENT (blocked by systemd assertions)')
+    except (OSError, ValueError):
+        print('  activation marker: UNSAFE')
+    for kind in ('service', 'socket'):
+        unit = f'envs-php-user@{name}.{kind}'
+        print(f'  {unit}: {_unit_summary(unit)}')
+    print('READ ONLY. No nginx, quota or account changes.')
+
+
+def _marker_bytes(name: str) -> bytes:
+    return (f'# envs.net v19 root-approved shell-UID FPM activation\n'
+            f'username={name}\n').encode('ascii')
+
+
+def _commit_args(action: str, name: str, commit: bool, dry_run: bool,
+                 confirm_uid: int | None, acct: pwd.struct_passwd) -> bool:
+    if not commit:
+        print(f'PREVIEW: {action} {name} would require --commit --confirm-uid {acct.pw_uid}.')
+        print('NO CHANGES MADE.')
+        return False
+    if dry_run:
+        raise ValueError('--commit and --dry-run are mutually exclusive')
+    if confirm_uid != acct.pw_uid:
+        raise ValueError(f'--confirm-uid must be {acct.pw_uid} for {name}')
+    return True
+
+
+def install_user(name: str, *, commit: bool, dry_run: bool, confirm_uid: int | None) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _preflight_base(name)
+        _check_staged(name, acct)
+        # Recheck the PHP application classification and absence of a legacy
+        # per-user FPM pool immediately before installing configuration.
+        templates, _, _ = load_template_hashes()
+        site = inspect_site(acct, templates)
+        if not site or site.issues or site.incomplete or not (site.php_count > site.bootstrap_count):
+            raise ValueError('site is no longer a clean custom-PHP candidate')
+        pools, pool_warnings = _legacy_fpm_matches(name)
+        if pools or pool_warnings:
+            raise ValueError('legacy PHP pool inventory is not clean; do not install')
+        wanted = _wanted_files(name)
+        # Never overwrite any existing unit or config; a matching shared
+        # template is allowed if installed by an earlier user.
+        creates: list[Path] = []
+        for p, expected in wanted.items():
+            try:
+                actual = _strict_file(p, allowed_modes=(0o644,))
+            except FileNotFoundError:
+                creates.append(p)
+                continue
+            if actual != expected:
+                raise ValueError(f'existing file differs; refusing to overwrite: {p}')
+        marker = MANAGED_DIR / f'user-{name}.allow'
+        if creates and (marker.exists() or marker.is_symlink()):
+            raise ValueError('activation marker unexpectedly exists before config installation')
+        if not creates:
+            print(f'ALREADY INSTALLED: {name}; no files changed.')
+            return 0
+        print('=== PHP-FPM config-only installation ===')
+        for p in creates:
+            print(f'  NEW: {p} (root:root 0644)')
+        print('No .allow marker will be created. No unit or nginx will be started.')
+        if not _commit_args('add', name, commit, dry_run, confirm_uid, acct):
+            return 0
+        written: list[Path] = []
+        try:
+            for p in creates:
+                _atomic_new_file(p, wanted[p])
+                written.append(p)
+        except Exception:
+            # No services started and no existing files overwritten;
+            # delete only files created by THIS attempt.
+            for p in reversed(written):
+                p.unlink()
+                _sync_dir(p.parent)
+            raise
+        _check_installed(name)
+        print('INSTALLED CONFIG ONLY. No activation, no .allow marker, no nginx change.')
+        print('Review now with: systemd-analyze verify <new units> / php-fpm8.4 -t -y <pool>')
+        return 0
+
+
+def check_user(name: str) -> int:
+    acct = _preflight_base(name)
+    _check_installed(name)
+    marker = MANAGED_DIR / f'user-{name}.allow'
+    try:
+        data = _strict_file(marker, allowed_modes=(0o644,))
+        if data != _marker_bytes(name):
+            raise ValueError('activation marker content mismatch')
+        marker_state = 'present'
+    except FileNotFoundError:
+        marker_state = 'absent (normal before activation)'
+    print(f'PASS: installed configuration matches v19, identity={name} UID={acct.pw_uid}.')
+    print(f'Marker: {marker_state}. No nginx migration or CGI isolation verified.')
+    print('WARNING: service unit is still a review-required template; dynamic access')
+    print('         to /srv, /var, /run and compatibility requires production audit.')
+    return 0
+
+
+def _systemctl(*args: str) -> None:
+    res = run(['systemctl', *args], timeout=35)
+    if res is None or res.returncode != 0:
+        error = 'command timed out or could not execute' if res is None else (res.stderr.strip() or res.stdout.strip())
+        raise ValueError(f'systemctl {" ".join(args)} failed: {error}')
+
+
+def activate_user(name: str, *, commit: bool, dry_run: bool,
+                  confirm_uid: int | None, confirm_reviewed: bool) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _preflight_base(name)
+        _check_installed(name)
+        pools, warnings = _legacy_fpm_matches(name)
+        if pools or warnings:
+            raise ValueError('legacy PHP pool inventory changed; abort activation')
+        marker = MANAGED_DIR / f'user-{name}.allow'
+        if marker.is_symlink() or marker.exists():
+            # Fail closed; never silently accept or overwrite old authorizations.
+            raise ValueError(f'activation marker already exists; inspect: {marker}')
+        if not commit:
+            print(f'PREVIEW: create {marker} and start envs-php-user@{name}.socket only.')
+            print('nginx is not changed. Socket access for production www-data is NOT verified.')
+            print('The templates were not live-tested for real users. This is not a rollout recommendation.')
+            _commit_args('enable', name, False, dry_run, confirm_uid, acct)
+            return 0
+        if not confirm_reviewed:
+            raise ValueError('enable requires --confirm-reviewed (manual sandbox/application review)')
+        if not _commit_args('enable', name, commit, dry_run, confirm_uid, acct):
+            return 0
+        _atomic_new_file(marker, _marker_bytes(name))
+        try:
+            _systemctl('daemon-reload')
+            _systemctl('start', f'envs-php-user@{name}.socket')
+        except Exception:
+            # If socket start failed, remove marker so no unattended restart
+            # from a future socket request can pass assertions.
+            # Do not stop an uncertain active unit automatically.
+            marker.unlink()
+            _sync_dir(marker.parent)
+            raise
+        print(f'STARTED SOCKET: envs-php-user@{name}.socket (PHP-FPM on demand)')
+        print('No nginx routes changed; verify service credentials/isolation separately.')
+        return 0
+
+
+def deactivate_user(name: str, *, commit: bool, dry_run: bool,
+                    confirm_uid: int | None) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = shell_account(name)
+        _admin_dir(MANAGED_DIR)
+        _check_installed(name)
+        marker = MANAGED_DIR / f'user-{name}.allow'
+        try:
+            data = _strict_file(marker, allowed_modes=(0o644,))
+            if data != _marker_bytes(name):
+                raise ValueError('unexpected activation marker content; manual review required')
+        except FileNotFoundError:
+            data = None
+        if not commit:
+            print(f'PREVIEW: stop ONLY envs-php-user@{name}.socket and .service')
+            print(f'         and remove its marker if present: {marker}')
+            print('WARNING: existing FastCGI requests may be interrupted.')
+            _commit_args('disable', name, False, dry_run, confirm_uid, acct)
+            return 0
+        if not _commit_args('disable', name, commit, dry_run, confirm_uid, acct):
+            return 0
+        _systemctl('stop', f'envs-php-user@{name}.socket', f'envs-php-user@{name}.service')
+        if data is not None:
+            marker.unlink()
+            _sync_dir(marker.parent)
+        print(f'STOPPED: user {name} socket and service, activation marker removed if present.')
+        print('NO nginx routes changed, accounts/quotas untouched.')
+        return 0
+
+
+# v20: production routing and boot persistence. Keep v19 exact unit templates
+# to remain compatible with already installed winter configuration.
+import tempfile
+
+NGINX_MAP_LINK = Path('/etc/nginx/sites-enabled/user.envs.net.conf')
+NGINX_MAP_REPO = Path('/opt/ops/etc/nginx/sites-available/user.envs.net.conf')
+NGINX_SITES_REPO = Path('/opt/ops/etc/nginx/sites-enabled')
+BOOT_DIR = SYSTEMD_DIR / 'sockets.target.wants'
+MAP_REGEX = re.compile(r'(?ms)^map[ \t]+\$user[ \t]+\$envs_php_backend[ \t]*\{\n(?P<body>.*?)^\}[ \t]*(?:\n|\Z)')
+MAP_ENTRY = re.compile(r'([a-z_][a-z0-9_-]*)\s+unix:/run/envs-php-user-([a-z_][a-z0-9_-]*)/php\.sock;\Z')
+MAP_DEFAULT = 'default unix:/run/php/php8.4-fpm.sock;'
+
+
+def _unit_active(unit: str) -> bool:
+    result = run(['systemctl', 'is-active', '--quiet', unit], timeout=10)
+    return result is not None and result.returncode == 0
+
+
+def _boot_link(name: str) -> Path:
+    return BOOT_DIR / f'envs-php-user@{validate_name(name)}.socket'
+
+
+def _boot_enabled(name: str) -> bool:
+    path = _boot_link(name)
+    if not os.path.lexists(path):
+        return False
+    st = path.lstat()
+    if not stat.S_ISLNK(st.st_mode) or st.st_uid != 0:
+        raise ValueError(f'unexpected boot dependency: {path}')
+    if path.resolve(strict=True) != SYSTEMD_DIR / USER_SOCKET_NAME:
+        raise ValueError(f'boot dependency points to unexpected unit: {path}')
+    return True
+
+
+def _trusted_nginx_sites_dir() -> None:
+    """Validate exactly the deployed, root-controlled nginx sites directory.
+
+    The directory itself may be a root-owned symlink to the *fixed* /opt/ops
+    sites-enabled directory. Symlink permission bits (usually 0777) do not
+    represent the permissions of the resolved directory. Do NOT loosen the
+    general-purpose _admin_dir() check used by other protected paths.
+    """
+    sites = NGINX_MAP_LINK.parent
+    st = sites.lstat()
+    if stat.S_ISLNK(st.st_mode):
+        _admin_dir(sites.parent)
+        if st.st_uid != 0:
+            raise ValueError(f'untrusted nginx sites directory symlink owner: {sites}')
+        target = sites.resolve(strict=True)
+        if target != NGINX_SITES_REPO:
+            raise ValueError(f'unexpected nginx sites directory symlink target: {sites} -> {target}')
+        _admin_dir(target)
+    else:
+        _admin_dir(sites)
+
+
+def _nginx_map_file() -> tuple[Path, bytes, int]:
+    """Use ONLY the reviewed v19 nginx allowlist, respecting its /opt/ops symlink."""
+    _trusted_nginx_sites_dir()
+    if NGINX_MAP_LINK.is_symlink():
+        link_stat = NGINX_MAP_LINK.lstat()
+        if link_stat.st_uid != 0:
+            raise ValueError(f'untrusted symlink owner: {NGINX_MAP_LINK}')
+    resolved = NGINX_MAP_LINK.resolve(strict=True)
+    if resolved not in (NGINX_MAP_REPO, NGINX_MAP_LINK):
+        raise ValueError(f'unexpected nginx map symlink target: {resolved}')
+    _admin_dir(resolved.parent)
+    data = _strict_file(resolved, allowed_modes=(0o644, 0o640, 0o600))
+    return resolved, data, stat.S_IMODE(resolved.stat().st_mode)
+
+
+def _parse_map(data: bytes) -> tuple[re.Match[str], dict[str, str], str]:
+    content = data.decode('utf-8')
+    matches = list(MAP_REGEX.finditer(content))
+    if len(matches) != 1:
+        raise ValueError(f'expected exactly one envs PHP map, found {len(matches)}')
+    match = matches[0]
+    items: dict[str, str] = {}
+    meaningful = [line.strip() for line in match.group('body').splitlines()
+                  if line.strip() and not line.lstrip().startswith('#')]
+    if not meaningful or meaningful.pop(0) != MAP_DEFAULT:
+        raise ValueError('unrecognized default PHP backend; refusing to modify')
+    for line in meaningful:
+        m = MAP_ENTRY.fullmatch(line)
+        if not m or m.group(1) != m.group(2):
+            raise ValueError(f'unrecognized PHP map entry {line!r}; refusing to modify')
+        user = validate_name(m.group(1))
+        if user in items:
+            raise ValueError(f'duplicate PHP map entry for {user}')
+        items[user] = f'unix:/run/envs-php-user-{user}/php.sock'
+    return match, items, content
+
+
+def _assert_routing_prerequisites() -> None:
+    """Refuse modification if reviewed shared PHP/alias routing has drifted."""
+    paths = (
+        (Path('/etc/nginx/snippets/php_common'), 'fastcgi_pass $envs_php_backend;'),
+        (Path('/etc/nginx/snippets/envs_user_alias_php'), 'fastcgi_pass $envs_php_backend;'),
+        (Path('/etc/nginx/snippets/envs_user_alias_php_params'), 'fastcgi_param  SCRIPT_FILENAME    $request_filename;'),
+    )
+    for path, expected in paths:
+        resolved = path.resolve(strict=True)
+        if resolved != path and resolved != Path('/opt/ops/etc/nginx/snippets') / path.name:
+            raise ValueError(f'unexpected nginx snippet symlink: {path} -> {resolved}')
+        _admin_dir(resolved.parent)
+        content = _strict_file(resolved, allowed_modes=(0o644, 0o640, 0o600)).decode('utf-8')
+        if content.count(expected) != 1:
+            raise ValueError(f'expected exactly one {expected!r} in {resolved}')
+    main_site = Path('/etc/nginx/sites-enabled/envs.net.conf').resolve(strict=True)
+    if main_site not in (Path('/etc/nginx/sites-enabled/envs.net.conf'),
+                         Path('/opt/ops/etc/nginx/sites-available/envs.net.conf')):
+        raise ValueError(f'unexpected main site target: {main_site}')
+    _admin_dir(main_site.parent)
+    text = _strict_file(main_site, allowed_modes=(0o644, 0o640, 0o600)).decode('utf-8')
+    if text.count('include snippets/envs_user_alias_php;') != 1:
+        raise ValueError('main site alias PHP include missing or duplicated')
+
+
+def _render_map(data: bytes, name: str, present: bool) -> tuple[bytes, bool, dict[str, str]]:
+    validate_name(name)
+    match, entries, text_value = _parse_map(data)
+    was_present = name in entries
+    if present:
+        entries[name] = f'unix:/run/envs-php-user-{name}/php.sock'
+    else:
+        entries.pop(name, None)
+    if was_present == present:
+        return data, False, entries
+    # Keep the reviewed explicit allowlist and the legacy default; never
+    # interpolate the hostname or a user supplied path into fastcgi_pass.
+    body = ('map $user $envs_php_backend {\n'
+            '    default unix:/run/php/php8.4-fpm.sock;\n' +
+            ''.join(f'    {user}  {backend};\n' for user, backend in sorted(entries.items())) +
+            '}\n')
+    new_text = text_value[:match.start()] + body + text_value[match.end():]
+    return new_text.encode('utf-8'), True, entries
+
+
+def _atomic_replace_map(path: Path, payload: bytes, mode: int, expected: bytes) -> None:
+    # The nginx config is root owned and does not contain credentials.
+    import hashlib
+    if path.read_bytes() != expected:
+        raise ValueError('nginx map was modified concurrently; refusing to overwrite')
+    fd, temp_name = tempfile.mkstemp(prefix='.envs-php-v20-', dir=path.parent)
+    try:
+        os.fchown(fd, 0, 0)
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, 'wb') as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temp_name, path)
+        _sync_dir(path.parent)
+    finally:
+        if os.path.lexists(temp_name):
+            os.unlink(temp_name)
+
+
+def _nginx_check() -> None:
+    result = run(['/usr/sbin/nginx', '-t'], timeout=30)
+    if result is None or result.returncode:
+        raise ValueError('nginx -t failed: ' +
+                         ('timeout/execution error' if result is None else result.stderr.strip()))
+
+
+def _nginx_reload() -> None:
+    _systemctl('reload', 'nginx')
+    if not _unit_active('nginx'):
+        raise ValueError('nginx became inactive after reload')
+
+
+def _nginx_map_update(name: str, *, want_route: bool) -> bool:
+    """Back up, atomically update, nginx -t, reload; restore+reload on failure."""
+    import hashlib
+    path, original, mode = _nginx_map_file()
+    modified, changed, _ = _render_map(original, name, want_route)
+    if not changed:
+        print(f'NO CHANGE: nginx {name} route already {"present" if want_route else "absent"}.')
+        return False
+    backup = Path(tempfile.mkdtemp(prefix='envs-php-v20-map-', dir='/root'))
+    os.chmod(backup, 0o700)
+    # Persist original metadata and file for manual recovery on interruption.
+    _atomic_new_file(backup / 'nginx-map.before', original, mode=0o600)
+    manifest = (f'file={path}\nmode={mode:04o}\n'
+                f'before_sha256={hashlib.sha256(original).hexdigest()}\n'
+                f'after_sha256={hashlib.sha256(modified).hexdigest()}\n'
+                f'action={"route" if want_route else "unroute"}\nuser={name}\n')
+    _atomic_new_file(backup / 'MANIFEST', manifest.encode(), mode=0o600)
+    print(f'BACKUP: {backup}')
+    _nginx_check()
+    _atomic_replace_map(path, modified, mode, original)
+    try:
+        _nginx_check()
+        _nginx_reload()
+    except Exception as original_error:
+        print(f'ERROR: nginx deployment failed ({original_error}), restoring map...', file=sys.stderr)
+        try:
+            _atomic_replace_map(path, original, mode, modified)
+            _nginx_check()
+            _nginx_reload()
+            print('RESTORED original map and reloaded nginx.', file=sys.stderr)
+        except Exception as restore_error:
+            raise ValueError(f'NGINX RECOVERY REQUIRED! {original_error}; rollback: {restore_error}; '
+                             f'backup: {backup}') from restore_error
+        raise ValueError(f'nginx route not changed: {original_error}; backup: {backup}') from original_error
+    print(f'APPLIED nginx {"route" if want_route else "unroute"} for {name}.')
+    print('Running nginx workers may still drain after reload. Do not stop a former backend yet.')
+    return True
+
+
+def _nginx_worker_preflight() -> None:
+    if not _unit_active('nginx'):
+        raise ValueError('nginx must be active')
+    res = run(['systemctl', 'show', '-P', 'MainPID', 'nginx'])
+    if not res or res.returncode or not res.stdout.strip().isdigit():
+        raise ValueError('cannot determine nginx main PID')
+    master_pid = int(res.stdout.strip())
+    res = run(['ps', '-o', 'user=,args=', '--ppid', str(master_pid)])
+    if not res or res.returncode:
+        raise ValueError('cannot inspect nginx host worker identity')
+    workers = [line.strip() for line in res.stdout.splitlines() if 'nginx: worker process' in line]
+    if not workers or any(not line.startswith(f'{WEB_USER} ') for line in workers):
+        raise ValueError('host nginx worker user differs from envs-web')
+
+
+def _preflight_route_user(name: str) -> pwd.struct_passwd:
+    acct = _preflight_base(name)
+    _check_installed(name)
+    marker = MANAGED_DIR / f'user-{name}.allow'
+    if _strict_file(marker, allowed_modes=(0o644,)) != _marker_bytes(name):
+        raise ValueError('activation marker content mismatch')
+    if not _boot_enabled(name):
+        raise ValueError('socket not enabled at boot; run enable first')
+    if not _unit_active(f'envs-php-user@{name}.socket'):
+        raise ValueError('user socket not active')
+    socket = Path(f'/run/envs-php-user-{name}/php.sock')
+    st = socket.lstat()
+    if (not stat.S_ISSOCK(st.st_mode) or st.st_uid != 0
+            or st.st_gid != grp.getgrnam(WEB_USER).gr_gid
+            or stat.S_IMODE(st.st_mode) != 0o660):
+        raise ValueError('user FPM socket identity/permissions not as expected')
+    _nginx_worker_preflight()
+    _assert_routing_prerequisites()
+    legacy, issues = _legacy_fpm_matches(name)
+    if legacy or issues:
+        raise ValueError('legacy per-user PHP-FPM pool still exists; manual migration audit required')
+    # A live PHP-FPM UID / namespace test must already have been performed.
+    return acct
+
+
+def change_route(name: str, *, commit: bool, dry_run: bool,
+                 confirm_uid: int | None, confirm_reviewed: bool,
+                 want_route: bool) -> int:
+    action = 'route' if want_route else 'unroute'
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _preflight_route_user(name) if want_route else _preflight_base(name)
+        _assert_routing_prerequisites()
+        path, old, _ = _nginx_map_file()
+        new, changed, entries = _render_map(old, name, want_route)
+        print(f'=== nginx {action}: {name} ===')
+        print(f'  map: {path}')
+        print(f'  {name}: {"private socket" if want_route else "legacy fallback"}')
+        print(f'  entries after: {", ".join(sorted(entries)) or "none"}')
+        if not changed:
+            print('ALREADY IN DESIRED STATE. No configuration changed.')
+            return 0
+        if not commit:
+            print('PREVIEW ONLY: nginx config and running workers unchanged.')
+            _commit_args(action, name, False, dry_run, confirm_uid, acct)
+            return 0
+        if want_route and not confirm_reviewed:
+            raise ValueError('route requires --confirm-reviewed (manual PHP/URL verification)')
+        _commit_args(action, name, commit, dry_run, confirm_uid, acct)
+        _nginx_map_update(name, want_route=want_route)
+        return 0
+
+
+def _draining_nginx_workers() -> list[str]:
+    res = run(['ps', '-eo', 'user=,args='])
+    if res is None or res.returncode:
+        raise ValueError('cannot inspect draining nginx workers')
+    return [line.strip() for line in res.stdout.splitlines()
+            if line.strip().startswith(f'{WEB_USER} ') and
+            'nginx: worker process is shutting down' in line]
+
+
+def _stop_guard(name: str) -> None:
+    _assert_routing_prerequisites()
+    _, original, _ = _nginx_map_file()
+    _, entries, _ = _parse_map(original)
+    if name in entries:
+        raise ValueError(f'{name} is still routed by nginx! Run unroute {name} first; do NOT stop the socket.')
+    draining = _draining_nginx_workers()
+    if draining:
+        raise ValueError('nginx still has draining old workers; defer socket stop until they exit')
+    _nginx_check()
+
+
+def enable_v20(name: str, *, commit: bool, dry_run: bool,
+               confirm_uid: int | None, confirm_reviewed: bool) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _preflight_base(name)
+        _check_installed(name)
+        marker = MANAGED_DIR / f'user-{name}.allow'
+        try:
+            current_marker = _strict_file(marker, allowed_modes=(0o644,))
+        except FileNotFoundError:
+            current_marker = None
+        if current_marker is not None and current_marker != _marker_bytes(name):
+            raise ValueError('unexpected activation marker content')
+        boot = _boot_enabled(name)
+        active = _unit_active(f'envs-php-user@{name}.socket')
+        print(f'=== enable {name} === marker={bool(current_marker)} socket_active={active} boot_enabled={boot}')
+        if not commit:
+            print('PREVIEW: ensure activation marker, start socket, add sockets.target dependency.')
+            print('NO nginx route changes.')
+            _commit_args('enable', name, False, dry_run, confirm_uid, acct)
+            return 0
+        if not confirm_reviewed:
+            raise ValueError('enable requires --confirm-reviewed')
+        _commit_args('enable', name, commit, dry_run, confirm_uid, acct)
+        legacy, warnings = _legacy_fpm_matches(name)
+        if legacy or warnings:
+            raise ValueError('existing legacy pool detected; manual review required')
+        created_marker = False
+        created_boot = False
+        if current_marker is None:
+            _atomic_new_file(marker, _marker_bytes(name))
+            created_marker = True
+        try:
+            _systemctl('daemon-reload')
+            if not active:
+                _systemctl('start', f'envs-php-user@{name}.socket')
+            if not boot:
+                _systemctl('add-wants', 'sockets.target', f'envs-php-user@{name}.socket')
+                created_boot = True
+            if not _boot_enabled(name) or not _unit_active(f'envs-php-user@{name}.socket'):
+                raise ValueError('enable verification failed')
+        except Exception:
+            # Do not remove existing or potentially in-use socket. Leave marker
+            # present when activation progressed; operator can inspect status.
+            if created_boot:
+                print('WARNING: dependency may have been created; inspect manually.', file=sys.stderr)
+            if created_marker:
+                print('WARNING: activation marker was created; inspect manually.', file=sys.stderr)
+            raise
+        print(f'ENABLED: envs-php-user@{name}.socket active and linked into sockets.target.')
+        print('No nginx routing changed. Verify PHP execution before route.')
+        return 0
+
+
+def disable_v20(name: str, *, commit: bool, dry_run: bool,
+                confirm_uid: int | None) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _preflight_base(name)
+        _check_installed(name)
+        _stop_guard(name)
+        marker = MANAGED_DIR / f'user-{name}.allow'
+        try:
+            data = _strict_file(marker, allowed_modes=(0o644,))
+            if data != _marker_bytes(name):
+                raise ValueError('unexpected activation marker content')
+        except FileNotFoundError:
+            data = None
+        boot = _boot_enabled(name)
+        print(f'=== disable {name} ===')
+        print('Route ABSENT and no draining nginx workers: safe to retire private socket.')
+        if not commit:
+            print('PREVIEW: stop user socket and service, remove sockets.target link and allow marker.')
+            _commit_args('disable', name, False, dry_run, confirm_uid, acct)
+            return 0
+        _commit_args('disable', name, commit, dry_run, confirm_uid, acct)
+        if boot:
+            _boot_link(name).unlink()
+            _systemctl('daemon-reload')
+        _systemctl('stop', f'envs-php-user@{name}.socket', f'envs-php-user@{name}.service')
+        if data is not None:
+            marker.unlink()
+            _sync_dir(marker.parent)
+        print(f'DISABLED: {name}; legacy nginx route remains in place.')
+        return 0
+
+
+def remove_v20(name: str, *, commit: bool, dry_run: bool,
+               confirm_uid: int | None) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _preflight_base(name)
+        _check_installed(name)
+        _stop_guard(name)
+        if _boot_enabled(name):
+            raise ValueError('boot activation still installed; disable first')
+        if _unit_active(f'envs-php-user@{name}.socket') or _unit_active(f'envs-php-user@{name}.service'):
+            raise ValueError('PHP-FPM unit still active; disable first')
+        marker = MANAGED_DIR / f'user-{name}.allow'
+        if os.path.lexists(marker):
+            raise ValueError('activation marker still present; disable first')
+        pool = MANAGED_DIR / f'user-{name}.conf'
+        print(f'=== remove {name} ===')
+        print(f'  would delete ONLY: {pool} (after root-only backup)')
+        print('  shared @.service/.socket templates are retained for other users')
+        if not commit:
+            _commit_args('remove', name, False, dry_run, confirm_uid, acct)
+            return 0
+        _commit_args('remove', name, commit, dry_run, confirm_uid, acct)
+        saved = Path(tempfile.mkdtemp(prefix=f'envs-php-v20-remove-{name}-', dir='/root'))
+        os.chmod(saved, 0o700)
+        _atomic_new_file(saved / pool.name, _strict_file(pool, allowed_modes=(0o644,)), mode=0o600)
+        pool.unlink()
+        _sync_dir(pool.parent)
+        _systemctl('daemon-reload')
+        print(f'REMOVED per-user config for {name}. Backup: {saved}')
+        return 0
+
+
+def status_v20(name: str) -> int:
+    validate_name(name)
+    _installed_status(name)
+    print('=== v20.1 routing and boot ===')
+    try:
+        _, data, _ = _nginx_map_file()
+        _, entries, _ = _parse_map(data)
+        print('  nginx backend:', entries.get(name, 'legacy default'))
+    except (OSError, ValueError) as exc:
+        print(f'  nginx map: NOT VERIFIED ({exc})')
+    try:
+        print('  boot activation:', 'ENABLED' if _boot_enabled(name) else 'DISABLED')
+    except (OSError, ValueError) as exc:
+        print(f'  boot activation: NOT VERIFIED ({exc})')
+    return 0
+
+
+# v20.2 CGI integration. No PHP-FPM v20.1 deployment routines are modified.
+# The systemd templates reproduce the validated winter service/socket,
+# with the explicit [Install] section added to the socket for reboot activation.
+CGI_MAP_FILE = Path('/etc/nginx/conf.d/envs-cgi-backends.conf')
+CGI_SHARED_SOCKET = 'unix:/run/fcgiwrap.socket'
+CGI_MAP_RX = re.compile(
+    r'(?ms)^map[ \t]+\$user[ \t]+\$envs_cgi_backend[ \t]*\{\s*\n(?P<body>.*?)^\}[ \t]*(?:\n|\Z)'
+)
+CGI_ENTRY_RX = re.compile(r'~\^([a-z_][a-z0-9_-]*)\$\s+unix:/run/envs-cgi-user-([a-z_][a-z0-9_-]*)/fcgiwrap\.sock;\Z')
+CGI_SERVICE_TEMPLATE = '''[Unit]
+Description=envs.net isolated CGI for {name}
+After=local-fs.target nss-user-lookup.target
+Requires=envs-cgi-user-{name}.socket
+RequiresMountsFor=/home/{name}
+AssertPathIsDirectory=/home/{name}
+
+[Service]
+Type=exec
+User={name}
+ExecStart=/usr/sbin/fcgiwrap -f
+UMask=0077
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=tmpfs
+BindPaths=/home/{name}:/home/{name}
+ReadWritePaths=/home/{name}
+TemporaryFileSystem=/srv:ro
+TemporaryFileSystem=/var/www:ro
+TemporaryFileSystem=/tmp:rw,nosuid,nodev,size=64M,mode=1777
+TemporaryFileSystem=/var/tmp:rw,nosuid,nodev,size=32M,mode=1777
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictSUIDSGID=yes
+RestrictNamespaces=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+MemoryMax=128M
+TasksMax=24
+LimitNOFILE=4096
+TimeoutStopSec=15s
+'''
+CGI_SOCKET_TEMPLATE = '''[Unit]
+Description=envs.net isolated CGI socket for {name}
+
+[Socket]
+ListenStream=/run/envs-cgi-user-{name}/fcgiwrap.sock
+Accept=no
+SocketUser=root
+SocketGroup=envs-web
+SocketMode=0660
+DirectoryMode=0755
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
+'''
+
+
+# One worker exactly reproduces the validated winter service unit. With more
+# workers, ONLY ExecStart differs; avoid introducing mutable unreviewed config.
+CGI_MIN_WORKERS = 1
+CGI_MAX_WORKERS = 4
+
+
+def _cgi_workers_validate(value: int) -> int:
+    if type(value) is not int or not CGI_MIN_WORKERS <= value <= CGI_MAX_WORKERS:
+        raise ValueError(f'CGI workers must be {CGI_MIN_WORKERS}..{CGI_MAX_WORKERS}')
+    return value
+
+
+def _cgi_service_template(name: str, workers: int = 1) -> bytes:
+    validate_name(name)
+    _cgi_workers_validate(workers)
+    template = CGI_SERVICE_TEMPLATE.format(name=name)
+    if workers != 1:
+        baseline = 'ExecStart=/usr/sbin/fcgiwrap -f\n'
+        if template.count(baseline) != 1:
+            raise ValueError('unrecognized CGI service baseline')
+        template = template.replace(baseline, f'ExecStart=/usr/sbin/fcgiwrap -f -c {workers}\n', 1)
+    return template.encode('utf-8')
+
+
+def _cgi_installed_workers(name: str) -> int | None:
+    """Return reviewed configured worker count, None if neither unit exists.
+
+    Unknown content, partial installs and unsafe unit files are always rejected.
+    """
+    _, _, service_file, socket_file, _ = _cgi_units(name)
+    service = None
+    socket = None
+    try:
+        service = _strict_file(service_file, allowed_modes=(0o644,))
+    except FileNotFoundError:
+        pass
+    try:
+        socket = _strict_file(socket_file, allowed_modes=(0o644,))
+    except FileNotFoundError:
+        pass
+    if service is None and socket is None:
+        return None
+    if service is None or socket is None:
+        raise ValueError('partial CGI unit installation; refusing automated changes')
+    if socket != CGI_SOCKET_TEMPLATE.format(name=name).encode('utf-8'):
+        raise ValueError(f'CGI socket unit differs from reviewed template: {socket_file}')
+    for workers in range(CGI_MIN_WORKERS, CGI_MAX_WORKERS + 1):
+        if service == _cgi_service_template(name, workers):
+            return workers
+    raise ValueError(f'CGI service unit differs from reviewed 1..4 worker templates: {service_file}')
+
+
+def _cgi_live_workers(pid: int) -> int | None:
+    """Best-effort command line inspection; does NOT prove current load."""
+    if pid <= 1:
+        return None
+    try:
+        data = Path(f'/proc/{pid}/cmdline').read_bytes()[:4096]
+    except OSError:
+        return None
+    args = [arg.decode('utf-8', 'replace') for arg in data.split(b'\0') if arg]
+    if not args or Path(args[0]).name != 'fcgiwrap':
+        return None
+    if '-c' in args:
+        try:
+            return int(args[args.index('-c') + 1])
+        except (ValueError, IndexError):
+            return None
+    return 1
+
+
+def _cgi_live_worker_count(name: str) -> int | None:
+    svc, _, _, _, _ = _cgi_units(name)
+    props = _service_properties(svc)
+    if not props or not props.get('MainPID', '').isdecimal():
+        return None
+    return _cgi_live_workers(int(props['MainPID']))
+
+
+def _cgi_worker_drift(name: str, configured: int) -> str | None:
+    svc, _, _, _, _ = _cgi_units(name)
+    if not _unit_active(svc):
+        return None  # socket may activate it later with the new config
+    live = _cgi_live_worker_count(name)
+    if live is None:
+        return 'live fcgiwrap worker configuration not inspectable'
+    if live != configured:
+        return (f'configured CGI workers={configured}, running service still uses {live}; '
+                'controlled restart required to apply, no automatic restart')
+    return None
+
+
+def cgi_idle_status(name: str) -> int:
+    """Read-only. No activity inference: fcgiwrap exposes no request counter."""
+    shell_account(name)
+    svc, sock, _, _, _ = _cgi_units(name)
+    configured = _cgi_installed_workers(name)
+    print(f'=== CGI idle status: {name} (READ ONLY) ===')
+    print(f'  installed workers: {configured if configured is not None else "NOT INSTALLED"}')
+    print(f'  socket active: {_unit_active(sock)}')
+    print(f'  service active: {_unit_active(svc)}')
+    print('  request-in-flight: UNKNOWN (fcgiwrap has no trustworthy idle API)')
+    print('  automatic idle shutdown: DISABLED (never stop an in-flight CGI)')
+    print('  systemd socket activation: keeps the socket ready; does not itself stop idle service')
+    print('NO CHANGES MADE.')
+    return 0
+
+
+def cgi_workers(name: str, workers: int, commit: bool, dry_run: bool,
+                confirm_uid: int | None) -> int:
+    """Stage a reviewed worker count; never restart an active service.
+
+    Replaces ONLY the owned service file, with backup and rollback on failed
+    systemd-analyze verify/daemon-reload. nginx, socket, and PHP are unchanged.
+    """
+    _cgi_workers_validate(workers)
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _cgi_preflight(name)
+        current = _cgi_installed_workers(name)
+        if current is None:
+            raise ValueError('CGI units not installed; use cgi-stage first')
+        svc, sock, service_file, socket_file, _ = _cgi_units(name)
+        target = _cgi_service_template(name, workers)
+        print(f'=== CGI workers: {name} ===')
+        print(f'  configured: {current} -> {workers}')
+        print(f'  live: {_cgi_live_worker_count(name)}' if _unit_active(svc) else '  live: service inactive')
+        print(f'  service file: {service_file}')
+        print('  no automatic restart / stop; live requests are not interrupted')
+        if workers == current:
+            print('ALREADY CONFIGURED. No changes made.')
+            return 0
+        if not _commit_args('cgi-workers', name, commit, dry_run, confirm_uid, acct):
+            return 0
+        old = _strict_file(service_file, allowed_modes=(0o644,))
+        if old != _cgi_service_template(name, current):
+            raise ValueError('CGI service configuration changed during preflight')
+        # A root-private on-disk copy survives even if systemd verification fails.
+        backup = Path(tempfile.mkdtemp(prefix=f'envs-cgi-workers-{name}-', dir='/root'))
+        os.chmod(backup, 0o700)
+        _atomic_new_file(backup / service_file.name, old, mode=0o600)
+        print(f'  backup: {backup}')
+        _atomic_replace_map(service_file, target, 0o644, old)
+        try:
+            result = run(['systemd-analyze', 'verify', str(service_file), str(socket_file)], timeout=30)
+            if result is None or result.returncode:
+                raise ValueError('systemd verify failed: ' +
+                                 ('timeout' if result is None else result.stderr.strip()))
+            _systemctl('daemon-reload')
+            if _cgi_installed_workers(name) != workers:
+                raise ValueError('staged CGI service file does not match expected workers')
+        except Exception as exc:
+            try:
+                _atomic_replace_map(service_file, old, 0o644, target)
+                _systemctl('daemon-reload')
+            except Exception as rollback_exc:
+                raise ValueError(f'CGI worker rollback FAILED; backup={backup}; '
+                                 f'original={exc}; rollback={rollback_exc}') from rollback_exc
+            raise ValueError(f'CGI workers unchanged after rollback: {exc}; backup={backup}') from exc
+        print('STAGED: systemd config reloaded. Running service intentionally NOT restarted.')
+        if _unit_active(svc):
+            print('PENDING: new worker count becomes effective after a controlled service restart.')
+            print('WARNING: service restart can interrupt CGI requests; schedule separately.')
+        else:
+            print('New worker count will apply on the next socket activation.')
+        return 0
+
+
+def _cgi_units(name: str) -> tuple[str, str, Path, Path, Path]:
+    validate_name(name)
+    svc = f'envs-cgi-user-{name}.service'
+    sock_unit = f'envs-cgi-user-{name}.socket'
+    return (svc, sock_unit, SYSTEMD_DIR / svc, SYSTEMD_DIR / sock_unit,
+            Path(f'/run/envs-cgi-user-{name}/fcgiwrap.sock'))
+
+
+def _cgi_expected_files(name: str, workers: int = 1) -> dict[Path, bytes]:
+    _, _, svc_file, sock_file, _ = _cgi_units(name)
+    return {svc_file: _cgi_service_template(name, workers),
+            sock_file: CGI_SOCKET_TEMPLATE.format(name=name).encode('utf-8')}
+
+
+def _cgi_preflight(name: str) -> pwd.struct_passwd:
+    """Reject dangerous shell accounts before any CGI control operation."""
+    acct = shell_account(name)
+    if os.geteuid() != 0:
+        raise ValueError('CGI service management requires root')
+    _admin_dir(HOME_ROOT)
+    _admin_dir(SYSTEMD_DIR)
+    home = HOME_ROOT / name
+    if home.resolve(strict=True) != home:
+        raise ValueError('CGI home is not canonical')
+    if home.lstat().st_mode & 0o022:
+        raise ValueError('CGI home is group/other writable')
+    gid = grp.getgrnam(WEB_USER).gr_gid
+    if gid in os.getgrouplist(name, acct.pw_gid):
+        raise ValueError('CGI user is a member of nginx socket-access group')
+    mount, correct_fs = _quota_mount()
+    if not correct_fs or _quota_state().get('User') != (True, True):
+        raise ValueError(f'CGI /home XFS quota enforcement not verified: {mount}')
+    if not Path('/usr/sbin/fcgiwrap').is_file():
+        raise ValueError('CGI fcgiwrap executable missing')
+    return acct
+
+
+def _cgi_installed(name: str) -> bool:
+    """Recognize unchanged winter plus reviewed worker variants (1..4)."""
+    return _cgi_installed_workers(name) is not None
+
+
+def _cgi_boot_enabled(name: str) -> bool:
+    _, sock_unit, _, _, _ = _cgi_units(name)
+    link = BOOT_DIR / sock_unit
+    if not os.path.lexists(link):
+        return False
+    _admin_dir(BOOT_DIR)
+    st = link.lstat()
+    if not stat.S_ISLNK(st.st_mode) or st.st_uid != 0:
+        raise ValueError(f'unsafe CGI boot link: {link}')
+    if link.resolve(strict=True) != SYSTEMD_DIR / sock_unit:
+        raise ValueError(f'CGI boot link target mismatch: {link}')
+    return True
+
+
+def _cgi_backend(name: str) -> str:
+    return f'unix:/run/envs-cgi-user-{validate_name(name)}/fcgiwrap.sock'
+
+
+def _cgi_map_parse(data: bytes) -> tuple[re.Match[str], dict[str, str], str]:
+    txt = data.decode('utf-8')
+    found = list(CGI_MAP_RX.finditer(txt))
+    if len(found) != 1:
+        raise ValueError(f'expected exactly one CGI nginx map, found {len(found)}')
+    match = found[0]
+    entries: dict[str, str] = {}
+    default_count = 0
+    for raw in match.group('body').splitlines():
+        entry = raw.strip()
+        if not entry or entry.startswith('#'):
+            continue
+        if re.fullmatch(r'default\s+unix:/run/fcgiwrap\.socket;', entry):
+            default_count += 1
+            continue
+        found_entry = CGI_ENTRY_RX.fullmatch(entry)
+        if not found_entry or found_entry.group(1) != found_entry.group(2):
+            raise ValueError(f'unrecognized CGI map entry {entry!r}; refusing modification')
+        user = validate_name(found_entry.group(1))
+        if user in entries:
+            raise ValueError(f'duplicate CGI nginx map entry: {user}')
+        entries[user] = _cgi_backend(user)
+    if default_count != 1:
+        raise ValueError('expected exactly one default shared CGI backend')
+    return match, entries, txt
+
+
+def _cgi_map_read() -> tuple[Path, bytes, int]:
+    data = _strict_file(CGI_MAP_FILE, allowed_modes=(0o644, 0o640, 0o600))
+    return CGI_MAP_FILE, data, stat.S_IMODE(CGI_MAP_FILE.lstat().st_mode)
+
+
+def _cgi_render_map(data: bytes, name: str, present: bool) -> tuple[bytes, bool, dict[str, str]]:
+    found, entries, original = _cgi_map_parse(data)
+    validate_name(name)
+    old = name in entries
+    if old == present:
+        return data, False, entries
+    if present:
+        entries[name] = _cgi_backend(name)
+    else:
+        del entries[name]
+    body = 'map $user $envs_cgi_backend {\n    default unix:/run/fcgiwrap.socket;\n'
+    for user in sorted(entries):
+        body += f'    ~^{user}$  {_cgi_backend(user)};\n'
+    body += '}\n'
+    return (original[:found.start()] + body + original[found.end():]).encode('utf-8'), True, entries
+
+
+def _cgi_config_path(path: Path) -> bytes:
+    """Read the two reviewed nginx files, including approved repository symlinks.
+
+    Unlike a blanket ``resolve()`` or a change to ``_strict_file``, this
+    exception accepts only known paths and only root-controlled ancestors.
+    The final resolved file is still opened with O_NOFOLLOW.
+    """
+    approved = {
+        Path('/etc/nginx/snippets/user.envs.conf'):
+            Path('/opt/ops/etc/nginx/snippets/user.envs.conf'),
+        Path('/etc/nginx/fastcgi_params'):
+            Path('/opt/ops/etc/nginx/fastcgi_params'),
+    }
+    if path not in approved:
+        raise ValueError(f'unreviewed CGI nginx config path: {path}')
+
+    parent = path.parent
+    pstat = parent.lstat()
+    if stat.S_ISLNK(pstat.st_mode):
+        _admin_dir(parent.parent)
+        if pstat.st_uid != 0 or parent.resolve(strict=True) != approved[path].parent:
+            raise ValueError(f'untrusted CGI nginx directory symlink: {parent}')
+        _admin_dir(approved[path].parent)
+    else:
+        _admin_dir(parent)
+
+    fstat = path.lstat()
+    if stat.S_ISLNK(fstat.st_mode) and fstat.st_uid != 0:
+        raise ValueError(f'untrusted CGI nginx file symlink: {path}')
+
+    target = path.resolve(strict=True)
+    if target not in (path, approved[path]):
+        raise ValueError(f'unapproved CGI nginx target: {path} -> {target}')
+    return _strict_file(target, allowed_modes=(0o644, 0o640, 0o600))
+
+
+def _cgi_read_main_config(
+    path: Path = Path('/etc/nginx/nginx.conf'),
+    approved_target: Path = Path('/opt/ops/etc/nginx/nginx.conf'),
+) -> bytes:
+    """Read root-controlled nginx.conf, optionally via one reviewed repo symlink.
+
+    Do not weaken _strict_file(): all other administrative files still reject
+    symlink leaves.  The symlink itself must be root-owned and live in a trusted
+    directory; its canonical target must be the exact reviewed nginx.conf path.
+    The target is then opened with O_NOFOLLOW and verified for owner and mode.
+    """
+    _admin_dir(path.parent)
+    if path.is_symlink():
+        link_st = path.lstat()
+        if link_st.st_uid != 0:
+            raise ValueError(f'nginx.conf symlink is not root-owned: {path}')
+        target = path.resolve(strict=True)
+        if target != approved_target:
+            raise ValueError(f'unapproved nginx.conf symlink target: {path} -> {target}; '
+                             f'expected {approved_target}')
+        path = target
+    return _strict_file(path, allowed_modes=(0o644, 0o640, 0o600))
+
+
+def _cgi_user_alias_body(configuration: str) -> str:
+    """Return only the reviewed /~USER and /u/USER location's contents.
+
+    The envs.net vhost has an independent global /cgi-bin location that
+    intentionally keeps the shared fcgiwrap backend.  It must not be counted
+    when auditing the nested user CGI location.
+
+    Require the exact reviewed alias header.  No dynamically constructed
+    regular expression is used to find the start of this nginx location.
+    """
+    expected = r'location ~ ^/(~|u/)(?<user>[\w-]+)(?<user_uri>/.*)?$ {'
+    starts = []
+    offset = 0
+    for line in configuration.splitlines(keepends=True):
+        if line.strip() == expected:
+            starts.append(offset + line.index('{') + 1)
+        offset += len(line)
+    if len(starts) != 1:
+        raise ValueError(f'expected exactly one reviewed user alias location, found {len(starts)}')
+
+    start = starts[0]
+    depth = 1
+    for pos in range(start, len(configuration)):
+        character = configuration[pos]
+        if character == '{':
+            depth += 1
+        elif character == '}':
+            depth -= 1
+            if depth == 0:
+                body = configuration[start:pos]
+                if body.count('alias /home/$user/public_html$user_uri;') != 1:
+                    raise ValueError('user alias path differs from reviewed user home')
+                return body
+    raise ValueError('unterminated nginx user alias location')
+
+
+def _cgi_nginx_preflight() -> None:
+    """Verify reviewed CGI dispatch for standard subdomain and /~ & /u alias paths.
+
+    This does not validate custom vhosts or prove a complete sandbox.
+    """
+    config = _cgi_read_main_config().decode('utf-8')
+    if not re.search(r'(?m)^\s*include\s+/etc/nginx/conf\.d/\*\.conf;', config):
+        raise ValueError('nginx.conf does not include CGI map directory')
+    subs = _cgi_config_path(Path('/etc/nginx/snippets/user.envs.conf')).decode('utf-8')
+    # Verify the reviewed subdomain server actually includes this snippet and
+    # captures the map key from the hostname (not a request-controlled header).
+    _, subdomain_server, _ = _nginx_map_file()
+    subdomain_server_text = subdomain_server.decode('utf-8')
+    if r'server_name ~^(?<user>[^.]+)\.envs\.net;' not in subdomain_server_text:
+        raise ValueError('cannot verify user subdomain server_name capture')
+    if 'include snippets/user.envs.conf;' not in subdomain_server_text:
+        raise ValueError('cannot verify user subdomain CGI snippet include')
+    _trusted_nginx_sites_dir()
+    alias_path = Path('/etc/nginx/sites-enabled/envs.net.conf')
+    if alias_path.is_symlink() and alias_path.lstat().st_uid != 0:
+        raise ValueError('unsafe alias server symlink owner')
+    resolved = alias_path.resolve(strict=True)
+    if resolved not in (alias_path, Path('/etc/nginx/sites-available/envs.net.conf'),
+                         Path('/opt/ops/etc/nginx/sites-available/envs.net.conf')):
+        raise ValueError(f'unexpected alias server nginx target: {resolved}')
+    alias = _strict_file(resolved, allowed_modes=(0o644, 0o640, 0o600)).decode('utf-8')
+    if 'root /home/$user/public_html;' not in subs:
+        raise ValueError('user subdomain root differs from reviewed user home')
+    user_alias = _cgi_user_alias_body(alias)
+    params = _cgi_config_path(Path('/etc/nginx/fastcgi_params')).decode('utf-8')
+    if len(re.findall(r'(?m)^\s*fastcgi_param\s+SCRIPT_FILENAME\s+\$request_filename\s*;', params)) != 1:
+        raise ValueError('FastCGI params must contain exactly one SCRIPT_FILENAME $request_filename')
+    for which, conf in (('user subdomain', subs), ('alias /~ and /u', user_alias)):
+        if conf.count('fastcgi_pass $envs_cgi_backend;') != 1:
+            raise ValueError(f'{which}: no unique CGI backend dispatch')
+        # Both relevant CGI locations must explicitly provide params; avoid
+        # the former duplicated SCRIPT_FILENAME in alias blocks.
+        if conf.count('fastcgi_pass unix:/var/run/fcgiwrap.socket;'):
+            raise ValueError(f'{which}: legacy CGI pass still present')
+        if 'fastcgi_param SCRIPT_FILENAME /home/$user/public_html$request_filename;' in conf:
+            raise ValueError(f'{which}: duplicated CGI SCRIPT_FILENAME still present')
+        if not re.search(r'(?s)location\s+~\s+\([^{}]*cgi[^{}]*\)\$\s*\{[^{}]*include\s+fastcgi_params;[^{}]*fastcgi_pass\s+\$envs_cgi_backend;', conf):
+            raise ValueError(f'{which}: cannot verify expected CGI location and params')
+    _nginx_check()
+
+
+def _cgi_runtime_check(name: str) -> tuple[list[str], list[str]]:
+    """Read-only local attestation, no user-controlled CGI code is executed."""
+    svc, sock_unit, _, _, sock = _cgi_units(name)
+    errors: list[str] = []
+    warnings: list[str] = []
+    configured_workers = None
+    try:
+        configured_workers = _cgi_installed_workers(name)
+        if configured_workers is None:
+            errors.append('CGI service/socket unit files not installed')
+    except (OSError, ValueError) as exc:
+        errors.append(str(exc))
+    try:
+        if not _cgi_boot_enabled(name):
+            errors.append('CGI socket not enabled at boot')
+    except (OSError, ValueError) as exc:
+        errors.append(str(exc))
+    if not _unit_active(sock_unit):
+        errors.append('CGI socket not active')
+    if not _unit_active(svc):
+        errors.append('CGI service not active (no live namespace proof)')
+    try:
+        parent = sock.parent.lstat()
+        if (not stat.S_ISDIR(parent.st_mode) or parent.st_uid != 0
+                or parent.st_mode & 0o022):
+            errors.append('CGI socket directory is not a trusted root-owned directory')
+        st = sock.lstat()
+        if (not stat.S_ISSOCK(st.st_mode) or st.st_uid != 0
+                or st.st_gid != grp.getgrnam(WEB_USER).gr_gid
+                or stat.S_IMODE(st.st_mode) != 0o660):
+            errors.append('CGI socket mode/owner/group not root:envs-web 0660')
+    except (OSError, KeyError) as exc:
+        errors.append(f'CGI socket inaccessible: {exc}')
+    acct = account(name)
+    if acct is None:
+        errors.append('CGI account missing')
+    props = _service_properties(svc)
+    active_config = run(['systemctl', 'show', svc, '--no-pager',
+                         '--property=NeedDaemonReload', '--property=ProtectHome',
+                         '--property=ProtectSystem', '--property=NoNewPrivileges',
+                         '--property=MemoryMax', '--property=TasksMax'], timeout=10)
+    if active_config is None or active_config.returncode:
+        errors.append('cannot inspect loaded CGI sandbox settings')
+    else:
+        settings = dict(line.split('=', 1) for line in active_config.stdout.splitlines() if '=' in line)
+        expected = {'NeedDaemonReload': 'no', 'ProtectHome': 'tmpfs',
+                    'ProtectSystem': 'strict', 'NoNewPrivileges': 'yes',
+                    'MemoryMax': '134217728', 'TasksMax': '24'}
+        for key, value in expected.items():
+            if settings.get(key) != value:
+                errors.append(f'CGI runtime sandbox {key}={settings.get(key)!r}, expected {value!r}')
+    if props is None:
+        errors.append('cannot inspect CGI service properties')
+    elif acct is not None:
+        if props.get('User') != name:
+            errors.append(f'CGI service runs as {props.get("User")!r}, not {name!r}')
+        pid_str = props.get('MainPID', '')
+        if not pid_str.isdecimal() or int(pid_str) <= 1:
+            errors.append('CGI MainPID missing; cannot verify UID or namespace')
+        else:
+            pid = int(pid_str)
+            try:
+                with open(f'/proc/{pid}/status', encoding='ascii') as stream:
+                    status = stream.read(100 * 1024)
+                m_uid = re.search(r'(?m)^Uid:\s+(\d+)', status)
+                m_gid = re.search(r'(?m)^Gid:\s+(\d+)', status)
+                if not m_uid or int(m_uid.group(1)) != acct.pw_uid:
+                    errors.append('CGI process UID differs from shell user')
+                if not m_gid or int(m_gid.group(1)) != acct.pw_gid:
+                    errors.append('CGI process primary GID differs from shell user')
+                names = sorted(p.name for p in Path(f'/proc/{pid}/root/home').iterdir())
+                if names != [name]:
+                    errors.append(f'CGI namespace /home entries: {names!r}, expected [{name!r}]')
+            except (OSError, ValueError) as exc:
+                errors.append(f'CGI process or mount namespace not inspectable: {exc}')
+    if configured_workers is not None:
+        drift = _cgi_worker_drift(name, configured_workers)
+        if drift:
+            warnings.append(drift)
+    # Namespace visibility does not prove all resource access or request safety.
+    warnings.append('Full sandbox, IPC, workload-specific compatibility and idle-shutdown safety require separate tests')
+    return errors, warnings
+
+
+def cgi_status(name: str) -> int:
+    acct = shell_account(name)
+    svc, sock_unit, svc_file, sock_file, sock_path = _cgi_units(name)
+    print(f'=== CGI status: {name} (READ ONLY) UID={acct.pw_uid} GID={acct.pw_gid} ===')
+    try:
+        configured_workers = _cgi_installed_workers(name)
+    except (OSError, ValueError) as exc:
+        configured_workers = None
+        print(f'  CGI managed service validation: FAILED ({exc})')
+    for path in (svc_file, sock_file):
+        try:
+            content = _strict_file(path, allowed_modes=(0o644,))
+            expected = (_cgi_expected_files(name, configured_workers or 1))[path]
+            print(f'  {path}: {"MATCH" if content == expected else "DRIFT"}')
+        except FileNotFoundError:
+            print(f'  {path}: NOT INSTALLED')
+        except (OSError, ValueError) as exc:
+            print(f'  {path}: UNSAFE ({exc})')
+    for unit in (sock_unit, svc):
+        print(f'  {unit}: {_unit_summary(unit)}')
+    print(f'  configured CGI workers: {configured_workers if configured_workers is not None else "NOT VERIFIED"}')
+    print(f'  live CGI workers (MainPID args): {_cgi_live_worker_count(name)}')
+    if configured_workers is not None:
+        drift = _cgi_worker_drift(name, configured_workers)
+        if drift:
+            print(f'  WARN: {drift}')
+    try:
+        print(f'  boot: {"ENABLED" if _cgi_boot_enabled(name) else "DISABLED"}')
+    except (OSError, ValueError) as exc:
+        print(f'  boot: NOT VERIFIED ({exc})')
+    print(f'  socket path: {sock_path}')
+    try:
+        _, data, _ = _cgi_map_read()
+        _, entries, _ = _cgi_map_parse(data)
+        print(f'  nginx CGI backend: {entries.get(name, CGI_SHARED_SOCKET)}')
+    except (OSError, UnicodeError, ValueError) as exc:
+        print(f'  nginx CGI backend: NOT VERIFIED ({exc})')
+    return 0
+
+
+def cgi_audit(name: str, strict: bool = False) -> int:
+    acct = shell_account(name)
+    print(f'=== CGI isolation audit: {name} (READ ONLY) ===')
+    hints, scan_issues = _find_cgi_hints(acct)
+    print(f'CGI filesystem hints : {len(hints)}')
+    for hint in hints[:12]:
+        print(f'  {hint}')
+    for warn in scan_issues[:12]:
+        print(f'WARN: {warn}')
+    for unit in ('fcgiwrap.service', 'fcgiwrap.socket'):
+        print(f'LEGACY: {unit}: {_unit_summary(unit)}')
+    errors: list[str] = []
+    warnings: list[str] = list(scan_issues)
+    try:
+        _, data, _ = _cgi_map_read()
+        _, entries, _ = _cgi_map_parse(data)
+        if name not in entries:
+            print(f'NOT CONFIGURED: {name} uses shared legacy CGI backend')
+            if strict:
+                return 1
+            print('NO CHANGES MADE.')
+            return 0
+        print(f'PASS: nginx map has explicit per-user CGI backend: {entries[name]}')
+        _cgi_nginx_preflight()
+        print('PASS: standard nginx CGI routes use the CGI backend map')
+    except (OSError, ValueError, UnicodeError) as exc:
+        errors.append(f'CGI nginx routing not verified: {exc}')
+    try:
+        cgi_acct = _cgi_preflight(name)
+        print(f'PASS: shell account UID={cgi_acct.pw_uid} GID={cgi_acct.pw_gid}; /home quotas on')
+    except (OSError, ValueError, KeyError) as exc:
+        errors.append(f'CGI account/quota preflight: {exc}')
+    rt_errors, rt_warns = _cgi_runtime_check(name)
+    errors.extend(rt_errors)
+    warnings.extend(rt_warns)
+    if not rt_errors:
+        print('PASS: CGI root-managed unit contents, boot, socket identity, live UID/GID and /home visibility')
+    for err in errors:
+        print(f'FAIL: {err}')
+    for warn in warnings:
+        print(f'WARN: {warn}')
+    print('NO CHANGES MADE. This audit does NOT prove a complete filesystem sandbox.')
+    if errors:
+        print('RESULT: FAIL - isolation not fully verified')
+        return 1
+    print('RESULT: PASS - checked CGI controls; remaining security tests are WARN')
+    return 0
+
+
+def cgi_plan(name: str) -> int:
+    acct = shell_account(name)
+    svc, sock_unit, svc_path, sock_path, socket = _cgi_units(name)
+    print(f'=== CGI plan: {name} (READ ONLY) ===')
+    print(f'  UID/GID: {acct.pw_uid}/{acct.pw_gid}, home: {acct.pw_dir}')
+    print(f'  service: {svc_path}')
+    print(f'  unit: {sock_path}')
+    print(f'  socket: {socket}')
+    print(f'  nginx map: {CGI_MAP_FILE}')
+    print('  stages: cgi-stage -> cgi-enable -> manual CGI probe -> cgi-route')
+    print('  optional: cgi-workers --workers 1..4 (no restart) / cgi-idle-status (read-only)')
+    print('  CGI management uses no extra UID, no new quota, no changes to PHP-FPM')
+    return 0
+
+
+def cgi_stage(name: str, commit: bool, dry_run: bool, confirm_uid: int | None) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _cgi_preflight(name)
+        exists = _cgi_installed(name)
+        print(f'=== CGI stage {name} === existing managed units={exists}')
+        if exists:
+            print(f'ALREADY INSTALLED: reviewed CGI units, workers={_cgi_installed_workers(name)}; unchanged.')
+            return 0
+        svc, sock, svc_file, sock_file, _ = _cgi_units(name)
+        print(f'  CREATE: {svc_file} root:root 0644')
+        print(f'  CREATE: {sock_file} root:root 0644')
+        if not _commit_args('cgi-stage', name, commit, dry_run, confirm_uid, acct):
+            return 0
+        written: list[Path] = []
+        try:
+            for path, contents in _cgi_expected_files(name).items():
+                _atomic_new_file(path, contents)
+                written.append(path)
+            result = run(['systemd-analyze', 'verify', str(svc_file), str(sock_file)], timeout=30)
+            if result is None or result.returncode:
+                raise ValueError('systemd unit verify failed: ' +
+                                 ('timeout' if result is None else result.stderr.strip()))
+            _systemctl('daemon-reload')
+        except Exception:
+            for path in reversed(written):
+                path.unlink()
+                _sync_dir(path.parent)
+            _systemctl('daemon-reload')
+            raise
+        print('STAGED: CGI units written. Socket not started; nginx untouched.')
+        return 0
+
+
+def cgi_enable(name: str, commit: bool, dry_run: bool, confirm_uid: int | None,
+               confirm_reviewed: bool) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _cgi_preflight(name)
+        if not _cgi_installed(name):
+            raise ValueError('CGI units not installed; run cgi-stage first')
+        _, socket_unit, _, _, _ = _cgi_units(name)
+        boot = _cgi_boot_enabled(name)
+        active = _unit_active(socket_unit)
+        print(f'=== CGI enable {name} === boot={boot} active={active}')
+        if boot and active:
+            print('ALREADY ENABLED. No changes made.')
+            return 0
+        if not _commit_args('cgi-enable', name, commit, dry_run, confirm_uid, acct):
+            return 0
+        if not confirm_reviewed:
+            raise ValueError('cgi-enable requires --confirm-reviewed (unit/site compatibility reviewed)')
+        _systemctl('enable', '--now', socket_unit)
+        if not _cgi_boot_enabled(name) or not _unit_active(socket_unit):
+            raise ValueError('CGI enable did not verify; leave existing state for inspection')
+        print('ENABLED CGI socket. No nginx routes changed; verify live UID/namespace before cgi-route.')
+        return 0
+
+
+def _cgi_map_update(name: str, want_route: bool) -> None:
+    path, original, mode = _cgi_map_read()
+    modified, changed, _ = _cgi_render_map(original, name, want_route)
+    if not changed:
+        print('ALREADY IN DESIRED STATE; nginx unchanged')
+        return
+    # Preserve the current content and metadata under root-only backup.
+    backup = Path(tempfile.mkdtemp(prefix='envs-cgi-v20-2-map-', dir='/root'))
+    os.chmod(backup, 0o700)
+    _atomic_new_file(backup / 'nginx-map.before', original, mode=0o600)
+    manifest = (f'file={path}\nmode={mode:04o}\n'
+                f'before_sha256={hashlib.sha256(original).hexdigest()}\n'
+                f'after_sha256={hashlib.sha256(modified).hexdigest()}\n'
+                f'action={"route" if want_route else "unroute"}\nuser={name}\n')
+    _atomic_new_file(backup / 'MANIFEST', manifest.encode('ascii'), mode=0o600)
+    print(f'BACKUP: {backup}')
+    _nginx_check()
+    _atomic_replace_map(path, modified, mode, original)
+    try:
+        _nginx_check()
+        _nginx_reload()
+    except Exception as exc:
+        try:
+            _atomic_replace_map(path, original, mode, modified)
+            _nginx_check()
+            _nginx_reload()
+        except Exception as rollback_exc:
+            raise ValueError(f'CGI NGINX RECOVERY REQUIRED: {exc}; rollback: {rollback_exc}; '
+                             f'backup: {backup}') from rollback_exc
+        raise ValueError(f'CGI nginx route not changed: {exc}; backup: {backup}') from exc
+    print('CGI nginx map changed and reloaded. Prior workers may still drain.')
+
+
+def cgi_route(name: str, commit: bool, dry_run: bool, confirm_uid: int | None,
+              confirmed: bool, want_route: bool) -> int:
+    action = 'cgi-route' if want_route else 'cgi-unroute'
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _cgi_preflight(name)
+        _cgi_nginx_preflight()
+        path, original, _ = _cgi_map_read()
+        _, entries, _ = _cgi_map_parse(original)
+        if want_route:
+            errs, _ = _cgi_runtime_check(name)
+            if errs:
+                raise ValueError('CGI runtime not ready: ' + '; '.join(errs))
+        _, changed, new_entries = _cgi_render_map(original, name, want_route)
+        print(f'=== {action} {name} === nginx map={path}')
+        print(f'  backend after: {new_entries.get(name, CGI_SHARED_SOCKET)}')
+        if not changed:
+            print('ALREADY IN DESIRED STATE; no changes made')
+            return 0
+        if not _commit_args(action, name, commit, dry_run, confirm_uid, acct):
+            return 0
+        if not confirmed:
+            if want_route:
+                raise ValueError('cgi-route requires --confirm-reviewed (live CGI probe and sandbox tests)')
+            raise ValueError('cgi-unroute requires --confirm-legacy-fallback (executes CGI under www-data)')
+        _nginx_worker_preflight()
+        _cgi_map_update(name, want_route)
+        return 0
+
+
+def _cgi_stop_guard(name: str) -> None:
+    _cgi_nginx_preflight()
+    _, original, _ = _cgi_map_read()
+    _, entries, _ = _cgi_map_parse(original)
+    if name in entries:
+        raise ValueError('CGI still routed to private socket: cgi-unroute first (legacy execution regression)')
+    if _draining_nginx_workers():
+        raise ValueError('nginx has draining workers; wait before disabling CGI socket')
+    _nginx_check()
+
+
+def cgi_disable(name: str, commit: bool, dry_run: bool, confirm_uid: int | None) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _cgi_preflight(name)
+        if not _cgi_installed(name):
+            raise ValueError('CGI units not installed')
+        _cgi_stop_guard(name)
+        svc, sock, _, _, _ = _cgi_units(name)
+        boot = _cgi_boot_enabled(name)
+        active = _unit_active(sock) or _unit_active(svc)
+        print(f'=== CGI disable {name} === boot={boot} running={active}')
+        if not boot and not active:
+            print('ALREADY DISABLED; no change')
+            return 0
+        if not _commit_args('cgi-disable', name, commit, dry_run, confirm_uid, acct):
+            return 0
+        _systemctl('stop', sock, svc)
+        if boot:
+            _systemctl('disable', sock)
+        if _unit_active(sock) or _unit_active(svc) or _cgi_boot_enabled(name):
+            raise ValueError('CGI disable verification failed')
+        print('DISABLED CGI units. nginx default shared backend unaffected.')
+        return 0
+
+
+def cgi_remove(name: str, commit: bool, dry_run: bool, confirm_uid: int | None) -> int:
+    with (_manager_lock() if commit else contextlib.nullcontext()):
+        acct = _cgi_preflight(name)
+        if not _cgi_installed(name):
+            print('CGI units NOT INSTALLED; no changes made')
+            return 0
+        _cgi_stop_guard(name)
+        svc, sock, svc_file, sock_file, _ = _cgi_units(name)
+        if _cgi_boot_enabled(name) or _unit_active(svc) or _unit_active(sock):
+            raise ValueError('CGI units active or boot-enabled: cgi-disable first')
+        print(f'=== CGI remove {name} === (backup + delete only user CGI units)')
+        if not _commit_args('cgi-remove', name, commit, dry_run, confirm_uid, acct):
+            return 0
+        backup = Path(tempfile.mkdtemp(prefix=f'envs-cgi-v20-2-remove-{name}-', dir='/root'))
+        os.chmod(backup, 0o700)
+        for path in (svc_file, sock_file):
+            _atomic_new_file(backup / path.name, _strict_file(path, allowed_modes=(0o644,)), mode=0o600)
+        try:
+            for path in (svc_file, sock_file):
+                path.unlink()
+                _sync_dir(path.parent)
+            _systemctl('daemon-reload')
+        except Exception:
+            for path in (svc_file, sock_file):
+                if not os.path.lexists(path):
+                    _atomic_new_file(path, (backup / path.name).read_bytes())
+            _systemctl('daemon-reload')
+            raise
+        print(f'REMOVED CGI unit files. Backup: {backup}. User files untouched.')
+        return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog='envs_php_fpm_manage',
+        description='v20.4.1: guarded shell-UID PHP-FPM and CGI management')
+    sub = ap.add_subparsers(dest='action', required=True)
+    for action in ('plan', 'status', 'check', 'cgi-audit', 'cgi-status', 'cgi-check', 'cgi-plan', 'cgi-idle-status'):
+        sub.add_parser(action, help='READ ONLY').add_argument('username')
+    d = sub.add_parser('discover', help='recursive PHP discovery (READ ONLY)')
+    d.add_argument('--user')
+    d.add_argument('--summary', action='store_true')
+    d.add_argument('--with-cgi', action='store_true',
+                   help='append CGI inventory with per-user PHP classification')
+    ci = sub.add_parser('cgi-inventory', help='systemwide read-only CGI inventory')
+    ci.add_argument('--user')
+    ci.add_argument('--summary', action='store_true')
+    ci.add_argument('--json', action='store_true', help='machine-readable read-only report')
+    s = sub.add_parser('sync', help='read-only candidate list')
+    s.add_argument('--user')
+    s.add_argument('--dry-run', action='store_true', required=True)
+    t = sub.add_parser('stage', help='write root-private OFFLINE review files only')
+    t.add_argument('username')
+    t.add_argument('--review-only', action='store_true', required=True)
+    for action in ('add', 'enable', 'disable', 'route', 'unroute', 'remove'):
+        p = sub.add_parser(action, help='preview by default; --commit is required for changes')
+        p.add_argument('username')
+        flags = p.add_mutually_exclusive_group()
+        flags.add_argument('--dry-run', action='store_true')
+        flags.add_argument('--commit', action='store_true')
+        p.add_argument('--confirm-uid', type=int)
+        if action in ('enable', 'route'):
+            p.add_argument('--confirm-reviewed', action='store_true')
+    for action in ('cgi-stage', 'cgi-enable', 'cgi-route', 'cgi-unroute', 'cgi-disable', 'cgi-remove'):
+        p = sub.add_parser(action, help='CGI preview by default; --commit to modify')
+        p.add_argument('username')
+        flags = p.add_mutually_exclusive_group()
+        flags.add_argument('--dry-run', action='store_true')
+        flags.add_argument('--commit', action='store_true')
+        p.add_argument('--confirm-uid', type=int)
+        if action in ('cgi-enable', 'cgi-route'):
+            p.add_argument('--confirm-reviewed', action='store_true')
+        if action == 'cgi-unroute':
+            p.add_argument('--confirm-legacy-fallback', action='store_true')
+    w = sub.add_parser('cgi-workers', help='stage CGI worker count 1..4; NEVER restarts a service')
+    w.add_argument('username')
+    w.add_argument('--workers', type=int, choices=range(1, 5), required=True)
+    w_flags = w.add_mutually_exclusive_group()
+    w_flags.add_argument('--dry-run', action='store_true')
+    w_flags.add_argument('--commit', action='store_true')
+    w.add_argument('--confirm-uid', type=int)
+    args = ap.parse_args()
+    try:
+        if args.action == 'plan': return isolation_plan(args.username)
+        if args.action in ('cgi-audit', 'cgi-check'): return cgi_audit(args.username, strict=args.action == 'cgi-check')
+        if args.action == 'cgi-status': return cgi_status(args.username)
+        if args.action == 'cgi-plan': return cgi_plan(args.username)
+        if args.action == 'cgi-idle-status': return cgi_idle_status(args.username)
+        if args.action == 'cgi-workers': return cgi_workers(args.username, args.workers,
+                                                             args.commit, args.dry_run, args.confirm_uid)
+        if args.action == 'cgi-stage': return cgi_stage(args.username, args.commit, args.dry_run, args.confirm_uid)
+        if args.action == 'cgi-enable': return cgi_enable(args.username, args.commit, args.dry_run, args.confirm_uid, args.confirm_reviewed)
+        if args.action == 'cgi-route': return cgi_route(args.username, args.commit, args.dry_run, args.confirm_uid, args.confirm_reviewed, True)
+        if args.action == 'cgi-unroute': return cgi_route(args.username, args.commit, args.dry_run, args.confirm_uid, args.confirm_legacy_fallback, False)
+        if args.action == 'cgi-disable': return cgi_disable(args.username, args.commit, args.dry_run, args.confirm_uid)
+        if args.action == 'cgi-remove': return cgi_remove(args.username, args.commit, args.dry_run, args.confirm_uid)
+        if args.action == 'discover': return discover(args.user, args.summary, args.with_cgi)
+        if args.action == 'cgi-inventory': return cgi_inventory(args.user, summary=args.summary,
+                                                                as_json=args.json)
+        if args.action == 'sync': return sync_preview(args.user)
+        if args.action == 'stage': return stage_shell_uid(args.username)
+        if args.action == 'status':
+            validate_name(args.username)
+            return status_v20(args.username)
+        if args.action == 'check': return check_user(args.username)
+        if args.action == 'add':
+            return install_user(args.username, commit=args.commit,
+                                dry_run=args.dry_run, confirm_uid=args.confirm_uid)
+        if args.action == 'enable':
+            return enable_v20(args.username, commit=args.commit,
+                                 dry_run=args.dry_run, confirm_uid=args.confirm_uid,
+                                 confirm_reviewed=args.confirm_reviewed)
+        if args.action == 'disable':
+            return disable_v20(args.username, commit=args.commit,
+                                   dry_run=args.dry_run, confirm_uid=args.confirm_uid)
+        if args.action in ('route', 'unroute'):
+            return change_route(args.username, commit=args.commit, dry_run=args.dry_run,
+                                confirm_uid=args.confirm_uid,
+                                confirm_reviewed=getattr(args, 'confirm_reviewed', False),
+                                want_route=args.action == 'route')
+        if args.action == 'remove':
+            return remove_v20(args.username, commit=args.commit,
+                              dry_run=args.dry_run, confirm_uid=args.confirm_uid)
+    except (ValueError, OSError, KeyError) as exc:
+        print(f'ERROR: {exc}', file=sys.stderr)
+        return 2
+    return 2
+
+if __name__ == '__main__':
+    sys.exit(main())
+
+
