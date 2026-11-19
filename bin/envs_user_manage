@@ -273,6 +273,104 @@ add_user() {
 	# Do not remove /var/signups_current here: review owns queue/archiving.
 }
 
+# Keep the provisioner out of the account while its backends are removed.
+# This is the SAME lock used by envs_web_autoprovision (v1.2.2). Hold its
+# descriptor until this script exits, including during userdel.
+web_autoprovision_lock_fd=''
+
+lock_web_autoprovision_for_deletion() {
+    local lock='/run/envs-web-autoprovision.lock' metadata
+    command -v flock >/dev/null 2>&1 || fail 'flock is required for safe web deprovisioning'
+    if [[ -e "$lock" || -L "$lock" ]]; then
+        [[ ! -L "$lock" && -f "$lock" ]] || fail "Unsafe autoprovision lock: $lock"
+        metadata=$(stat -c '%u:%a:%h' -- "$lock") || fail 'Cannot inspect autoprovision lock'
+        [[ "$metadata" == '0:600:1' ]] || fail "Unexpected autoprovision lock metadata: $metadata"
+    fi
+    exec {web_autoprovision_lock_fd}<> "$lock" || fail "Cannot open $lock"
+    metadata=$(stat -c '%u:%a:%h' -- "$lock") || fail 'Cannot inspect opened autoprovision lock'
+    [[ "$metadata" == '0:600:1' ]] || fail "Unexpected autoprovision lock metadata: $metadata"
+    flock -n "$web_autoprovision_lock_fd" || \
+        fail 'Web auto-provisioner is running; retry deletion after it finishes'
+}
+
+# A removed route falls back to the old shared backend in the nginx map.
+# These existing guards must reject that fallback, or deletion must stop.
+check_web_fail_closed_for_deletion() {
+    local php_guard='if ($envs_php_backend = "unix:/run/php/php8.4-fpm.sock") {'
+    local cgi_guard='if ($envs_cgi_backend = "unix:/run/fcgiwrap.socket") {'
+    grep -Fq -- "$php_guard" /etc/nginx/snippets/user.envs.conf || \
+        fail 'Missing PHP fail-closed guard in user.envs.conf'
+    grep -Fq -- "$php_guard" /etc/nginx/snippets/envs_user_alias_php || \
+        fail 'Missing PHP fail-closed guard for user aliases'
+    grep -Fq -- "$cgi_guard" /etc/nginx/snippets/user.envs.conf || \
+        fail 'Missing CGI fail-closed guard in user.envs.conf'
+    grep -Fq -- "$cgi_guard" /etc/nginx/sites-enabled/envs.net.conf || \
+        fail 'Missing CGI fail-closed guard for user aliases'
+}
+
+# User MUST still exist: all manager actions check NSS, UID and /home.
+# If any step fails, stop before userdel. Re-running del is supported:
+# unroute is idempotent; installed/absent units are checked individually.
+deprovision_user_web() {
+    local uid="$1" manager='/usr/local/sbin/envs_php_fpm_manage'
+    local pool="/etc/envs/php-fpm/user-$user.conf"
+    local marker="/etc/envs/php-fpm/user-$user.allow"
+    local php_boot="/etc/systemd/system/sockets.target.wants/envs-php-user@$user.socket"
+    local cgi_svc="/etc/systemd/system/envs-cgi-user-$user.service"
+    local cgi_sock="/etc/systemd/system/envs-cgi-user-$user.socket"
+    local cgi_boot="/etc/systemd/system/sockets.target.wants/envs-cgi-user-$user.socket"
+
+    [[ -x "$manager" ]] || fail "Missing executable web manager: $manager"
+    lock_web_autoprovision_for_deletion
+    [[ "$(id -u -- "$user")" == "$uid" ]] || fail 'UID changed while preparing web cleanup'
+    check_web_fail_closed_for_deletion
+
+    # Reject partial PHP installs, but allow accounts that never used PHP.
+    if [[ ! -e "$pool" && ! -L "$pool" ]]; then
+        if [[ -e "$marker" || -L "$marker" || -e "$php_boot" || -L "$php_boot" ]] || \
+           systemctl is-active --quiet "envs-php-user@$user.socket" || \
+           systemctl is-active --quiet "envs-php-user@$user.service"; then
+            fail 'PHP-FPM pool missing but activation state exists; manual review required'
+        fi
+    fi
+
+    printf '[INFO] Retiring nginx PHP/CGI routes for %s (UID %s).\n' "$user" "$uid"
+    "$manager" unroute "$user" --commit --confirm-uid "$uid" || \
+        fail 'PHP unroute failed; Unix account has NOT been deleted'
+    "$manager" cgi-unroute "$user" --commit --confirm-uid "$uid" --confirm-legacy-fallback || \
+        fail 'CGI unroute failed; Unix account has NOT been deleted'
+
+    # Account deletion intentionally permits old nginx workers to finish
+    # with errors if they still reference this account. Routes are already
+    # removed; --retire-user bypasses ONLY the global draining-worker check.
+    if [[ -e "$pool" || -L "$pool" ]]; then
+        "$manager" disable "$user" --commit --confirm-uid "$uid" --retire-user || \
+            fail 'PHP disable failed; Unix account has NOT been deleted'
+        "$manager" remove "$user" --commit --confirm-uid "$uid" --retire-user || \
+            fail 'PHP remove failed; Unix account has NOT been deleted'
+    fi
+
+    if [[ -e "$cgi_svc" || -L "$cgi_svc" || -e "$cgi_sock" || -L "$cgi_sock" ]]; then
+        "$manager" cgi-disable "$user" --commit --confirm-uid "$uid" --retire-user || \
+            fail 'CGI disable failed; Unix account has NOT been deleted'
+        "$manager" cgi-remove "$user" --commit --confirm-uid "$uid" --retire-user || \
+            fail 'CGI remove failed; Unix account has NOT been deleted'
+    elif [[ -e "$cgi_boot" || -L "$cgi_boot" ]] || \
+         systemctl is-active --quiet "envs-cgi-user-$user.socket" || \
+         systemctl is-active --quiet "envs-cgi-user-$user.service"; then
+        fail 'CGI unit files missing but activation state exists; manual review required'
+    fi
+
+    # Confirm that no managed route remains before deleting the shell UID.
+    if grep -Fq -- "unix:/run/envs-php-user-$user/php.sock;" \
+            /etc/nginx/sites-enabled/user.envs.net.conf || \
+       grep -Fq -- "unix:/run/envs-cgi-user-$user/fcgiwrap.sock;" \
+            /etc/nginx/conf.d/envs-cgi-backends.conf; then
+        fail 'Stale private nginx route remains; Unix account has NOT been deleted'
+    fi
+    printf '[INFO] PHP-FPM/CGI cleanup completed for %s.\n' "$user"
+}
+
 # Refuse destructive operations against accounts outside /home/<username>.
 check_deletion_target() {
 	local entry uid home
@@ -297,6 +395,12 @@ del_user() {
 		elif length == 1 then .[0] | tostring
 		else "" end
 	') || fail "Cannot identify a unique mailbox for $user"
+
+	# Must happen BEFORE userdel: web manager validates the existing UID/home.
+	# The autoprovisioner lock stays open until script exit.
+	local delete_uid
+	delete_uid=$(id -u -- "$user") || fail "Cannot resolve UID for $user"
+	deprovision_user_web "$delete_uid"
 
 	if ! printf 'MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\nTo: team-leave@%s\r\nFrom: %s@%s\r\nSubject: leave\r\n\r\n' \
 		"$domain" "$user" "$domain" | sudo -u "$user" sendmail -oi -t; then

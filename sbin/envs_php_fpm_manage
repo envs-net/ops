@@ -1924,6 +1924,54 @@ def _nginx_reload() -> None:
         raise ValueError('nginx became inactive after reload')
 
 
+# Only failed/interrupted deployments leave recovery artifacts. Successful
+# mutations remove their temporary copies, keeping /root and the recovery
+# store free of routine backups. This is separate from the offline v18 review
+# artifacts under /root/envs-php-user-review-v18.
+RECOVERY_DIR = Path('/var/lib/envs-web-manager/recovery')
+
+
+def _new_recovery_backup(prefix: str) -> Path:
+    # The backup may contain a user's private service configuration. Every
+    # ancestor must be root-controlled, and the two managed dirs root-private.
+    for parent in (Path('/var'), Path('/var/lib')):
+        st = parent.lstat()
+        if (not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or
+                st.st_mode & 0o022):
+            raise ValueError(f'unsafe recovery parent: {parent}')
+    for directory in (RECOVERY_DIR.parent, RECOVERY_DIR):
+        try:
+            directory.mkdir(mode=0o700)
+            _sync_dir(directory.parent)
+        except FileExistsError:
+            pass
+        st = directory.lstat()
+        if (not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or
+                stat.S_IMODE(st.st_mode) != 0o700):
+            raise ValueError(f'unsafe recovery directory: {directory}')
+    backup = Path(tempfile.mkdtemp(prefix=prefix, dir=RECOVERY_DIR))
+    _sync_dir(RECOVERY_DIR)
+    return backup
+
+
+def _discard_successful_backup(backup: Path) -> None:
+    # Best-effort housekeeping ONLY AFTER the operation has committed. A
+    # cleanup error must not turn an applied nginx/systemd change into a
+    # misleading failed action that is retried or rolled back.
+    try:
+        if backup.parent != RECOVERY_DIR or backup.is_symlink():
+            raise ValueError(f'unexpected backup cleanup target: {backup}')
+        st = backup.lstat()
+        if (not stat.S_ISDIR(st.st_mode) or st.st_uid != 0 or
+                stat.S_IMODE(st.st_mode) != 0o700):
+            raise ValueError(f'unsafe backup cleanup target: {backup}')
+        shutil.rmtree(backup)
+        _sync_dir(RECOVERY_DIR)
+    except (OSError, ValueError) as exc:
+        print(f'WARNING: committed successfully; could not remove temporary recovery copy '
+              f'{backup}: {exc}', file=sys.stderr)
+
+
 def _nginx_map_update(name: str, *, want_route: bool) -> bool:
     """Back up, atomically update, nginx -t, reload; restore+reload on failure."""
     import hashlib
@@ -1932,8 +1980,7 @@ def _nginx_map_update(name: str, *, want_route: bool) -> bool:
     if not changed:
         print(f'NO CHANGE: nginx {name} route already {"present" if want_route else "absent"}.')
         return False
-    backup = Path(tempfile.mkdtemp(prefix='envs-php-v20-map-', dir='/root'))
-    os.chmod(backup, 0o700)
+    backup = _new_recovery_backup('envs-php-v20-map-')
     # Persist original metadata and file for manual recovery on interruption.
     _atomic_new_file(backup / 'nginx-map.before', original, mode=0o600)
     manifest = (f'file={path}\nmode={mode:04o}\n'
@@ -1941,7 +1988,7 @@ def _nginx_map_update(name: str, *, want_route: bool) -> bool:
                 f'after_sha256={hashlib.sha256(modified).hexdigest()}\n'
                 f'action={"route" if want_route else "unroute"}\nuser={name}\n')
     _atomic_new_file(backup / 'MANIFEST', manifest.encode(), mode=0o600)
-    print(f'BACKUP: {backup}')
+    print(f'TEMPORARY RECOVERY COPY: {backup}')
     _nginx_check()
     _atomic_replace_map(path, modified, mode, original)
     try:
@@ -1958,6 +2005,7 @@ def _nginx_map_update(name: str, *, want_route: bool) -> bool:
             raise ValueError(f'NGINX RECOVERY REQUIRED! {original_error}; rollback: {restore_error}; '
                              f'backup: {backup}') from restore_error
         raise ValueError(f'nginx route not changed: {original_error}; backup: {backup}') from original_error
+    _discard_successful_backup(backup)
     print(f'APPLIED nginx {"route" if want_route else "unroute"} for {name}.')
     print('Running nginx workers may still drain after reload. Do not stop a former backend yet.')
     return True
@@ -2039,16 +2087,19 @@ def _draining_nginx_workers() -> list[str]:
             'nginx: worker process is shutting down' in line]
 
 
-def _stop_guard(name: str) -> None:
+def _stop_guard(name: str, *, retiring_user: bool = False) -> None:
     _assert_routing_prerequisites()
     _, original, _ = _nginx_map_file()
     _, entries, _ = _parse_map(original)
     if name in entries:
         raise ValueError(f'{name} is still routed by nginx! Run unroute {name} first; do NOT stop the socket.')
-    draining = _draining_nginx_workers()
-    if draining:
-        raise ValueError('nginx still has draining old workers; defer socket stop until they exit')
+    if not retiring_user:
+        draining = _draining_nginx_workers()
+        if draining:
+            raise ValueError('nginx still has draining old workers; defer socket stop until they exit')
     _nginx_check()
+    if retiring_user:
+        print('WARNING: retiring account: old nginx workers may still hold requests to this PHP backend.')
 
 
 def enable_v20(name: str, *, commit: bool, dry_run: bool,
@@ -2105,11 +2156,11 @@ def enable_v20(name: str, *, commit: bool, dry_run: bool,
 
 
 def disable_v20(name: str, *, commit: bool, dry_run: bool,
-                confirm_uid: int | None) -> int:
+                confirm_uid: int | None, retiring_user: bool = False) -> int:
     with (_manager_lock() if commit else contextlib.nullcontext()):
         acct = _preflight_base(name)
         _check_installed(name)
-        _stop_guard(name)
+        _stop_guard(name, retiring_user=retiring_user)
         marker = MANAGED_DIR / f'user-{name}.allow'
         try:
             data = _strict_file(marker, allowed_modes=(0o644,))
@@ -2119,7 +2170,9 @@ def disable_v20(name: str, *, commit: bool, dry_run: bool,
             data = None
         boot = _boot_enabled(name)
         print(f'=== disable {name} ===')
-        print('Route ABSENT and no draining nginx workers: safe to retire private socket.')
+        print('Route ABSENT; retiring account may interrupt requests in old nginx workers.'
+              if retiring_user else
+              'Route ABSENT and no draining nginx workers: safe to retire private socket.')
         if not commit:
             print('PREVIEW: stop user socket and service, remove sockets.target link and allow marker.')
             _commit_args('disable', name, False, dry_run, confirm_uid, acct)
@@ -2137,11 +2190,11 @@ def disable_v20(name: str, *, commit: bool, dry_run: bool,
 
 
 def remove_v20(name: str, *, commit: bool, dry_run: bool,
-               confirm_uid: int | None) -> int:
+               confirm_uid: int | None, retiring_user: bool = False) -> int:
     with (_manager_lock() if commit else contextlib.nullcontext()):
         acct = _preflight_base(name)
         _check_installed(name)
-        _stop_guard(name)
+        _stop_guard(name, retiring_user=retiring_user)
         if _boot_enabled(name):
             raise ValueError('boot activation still installed; disable first')
         if _unit_active(f'envs-php-user@{name}.socket') or _unit_active(f'envs-php-user@{name}.service'):
@@ -2151,19 +2204,19 @@ def remove_v20(name: str, *, commit: bool, dry_run: bool,
             raise ValueError('activation marker still present; disable first')
         pool = MANAGED_DIR / f'user-{name}.conf'
         print(f'=== remove {name} ===')
-        print(f'  would delete ONLY: {pool} (after root-only backup)')
+        print(f'  would delete ONLY: {pool} (after temporary root-private recovery copy)')
         print('  shared @.service/.socket templates are retained for other users')
         if not commit:
             _commit_args('remove', name, False, dry_run, confirm_uid, acct)
             return 0
         _commit_args('remove', name, commit, dry_run, confirm_uid, acct)
-        saved = Path(tempfile.mkdtemp(prefix=f'envs-php-v20-remove-{name}-', dir='/root'))
-        os.chmod(saved, 0o700)
+        saved = _new_recovery_backup(f'envs-php-v20-remove-{name}-')
         _atomic_new_file(saved / pool.name, _strict_file(pool, allowed_modes=(0o644,)), mode=0o600)
         pool.unlink()
         _sync_dir(pool.parent)
         _systemctl('daemon-reload')
-        print(f'REMOVED per-user config for {name}. Backup: {saved}')
+        _discard_successful_backup(saved)
+        print(f'REMOVED per-user config for {name}. Temporary recovery copy removed.')
         return 0
 
 
@@ -2385,11 +2438,10 @@ def cgi_workers(name: str, workers: int, commit: bool, dry_run: bool,
         old = _strict_file(service_file, allowed_modes=(0o644,))
         if old != _cgi_service_template(name, current):
             raise ValueError('CGI service configuration changed during preflight')
-        # A root-private on-disk copy survives even if systemd verification fails.
-        backup = Path(tempfile.mkdtemp(prefix=f'envs-cgi-workers-{name}-', dir='/root'))
-        os.chmod(backup, 0o700)
+        # Root-private recovery copy survives a verification failure.
+        backup = _new_recovery_backup(f'envs-cgi-workers-{name}-')
         _atomic_new_file(backup / service_file.name, old, mode=0o600)
-        print(f'  backup: {backup}')
+        print(f'  temporary recovery copy: {backup}')
         _atomic_replace_map(service_file, target, 0o644, old)
         try:
             result = run(['systemd-analyze', 'verify', str(service_file), str(socket_file)], timeout=30)
@@ -2407,6 +2459,7 @@ def cgi_workers(name: str, workers: int, commit: bool, dry_run: bool,
                 raise ValueError(f'CGI worker rollback FAILED; backup={backup}; '
                                  f'original={exc}; rollback={rollback_exc}') from rollback_exc
             raise ValueError(f'CGI workers unchanged after rollback: {exc}; backup={backup}') from exc
+        _discard_successful_backup(backup)
         print('STAGED: systemd config reloaded. Running service intentionally NOT restarted.')
         if _unit_active(svc):
             print('PENDING: new worker count becomes effective after a controlled service restart.')
@@ -2918,16 +2971,15 @@ def _cgi_map_update(name: str, want_route: bool) -> None:
     if not changed:
         print('ALREADY IN DESIRED STATE; nginx unchanged')
         return
-    # Preserve the current content and metadata under root-only backup.
-    backup = Path(tempfile.mkdtemp(prefix='envs-cgi-v20-2-map-', dir='/root'))
-    os.chmod(backup, 0o700)
+    # Keep the original temporarily for rollback and interrupted-operation recovery.
+    backup = _new_recovery_backup('envs-cgi-v20-2-map-')
     _atomic_new_file(backup / 'nginx-map.before', original, mode=0o600)
     manifest = (f'file={path}\nmode={mode:04o}\n'
                 f'before_sha256={hashlib.sha256(original).hexdigest()}\n'
                 f'after_sha256={hashlib.sha256(modified).hexdigest()}\n'
                 f'action={"route" if want_route else "unroute"}\nuser={name}\n')
     _atomic_new_file(backup / 'MANIFEST', manifest.encode('ascii'), mode=0o600)
-    print(f'BACKUP: {backup}')
+    print(f'TEMPORARY RECOVERY COPY: {backup}')
     _nginx_check()
     _atomic_replace_map(path, modified, mode, original)
     try:
@@ -2942,6 +2994,7 @@ def _cgi_map_update(name: str, want_route: bool) -> None:
             raise ValueError(f'CGI NGINX RECOVERY REQUIRED: {exc}; rollback: {rollback_exc}; '
                              f'backup: {backup}') from rollback_exc
         raise ValueError(f'CGI nginx route not changed: {exc}; backup: {backup}') from exc
+    _discard_successful_backup(backup)
     print('CGI nginx map changed and reloaded. Prior workers may still drain.')
 
 
@@ -2974,23 +3027,26 @@ def cgi_route(name: str, commit: bool, dry_run: bool, confirm_uid: int | None,
         return 0
 
 
-def _cgi_stop_guard(name: str) -> None:
+def _cgi_stop_guard(name: str, *, retiring_user: bool = False) -> None:
     _cgi_nginx_preflight()
     _, original, _ = _cgi_map_read()
     _, entries, _ = _cgi_map_parse(original)
     if name in entries:
         raise ValueError('CGI still routed to private socket: cgi-unroute first (legacy execution regression)')
-    if _draining_nginx_workers():
+    if not retiring_user and _draining_nginx_workers():
         raise ValueError('nginx has draining workers; wait before disabling CGI socket')
     _nginx_check()
+    if retiring_user:
+        print('WARNING: retiring account: old nginx workers may still hold requests to this CGI backend.')
 
 
-def cgi_disable(name: str, commit: bool, dry_run: bool, confirm_uid: int | None) -> int:
+def cgi_disable(name: str, commit: bool, dry_run: bool, confirm_uid: int | None,
+                retiring_user: bool = False) -> int:
     with (_manager_lock() if commit else contextlib.nullcontext()):
         acct = _cgi_preflight(name)
         if not _cgi_installed(name):
             raise ValueError('CGI units not installed')
-        _cgi_stop_guard(name)
+        _cgi_stop_guard(name, retiring_user=retiring_user)
         svc, sock, _, _, _ = _cgi_units(name)
         boot = _cgi_boot_enabled(name)
         active = _unit_active(sock) or _unit_active(svc)
@@ -3009,21 +3065,21 @@ def cgi_disable(name: str, commit: bool, dry_run: bool, confirm_uid: int | None)
         return 0
 
 
-def cgi_remove(name: str, commit: bool, dry_run: bool, confirm_uid: int | None) -> int:
+def cgi_remove(name: str, commit: bool, dry_run: bool, confirm_uid: int | None,
+               retiring_user: bool = False) -> int:
     with (_manager_lock() if commit else contextlib.nullcontext()):
         acct = _cgi_preflight(name)
         if not _cgi_installed(name):
             print('CGI units NOT INSTALLED; no changes made')
             return 0
-        _cgi_stop_guard(name)
+        _cgi_stop_guard(name, retiring_user=retiring_user)
         svc, sock, svc_file, sock_file, _ = _cgi_units(name)
         if _cgi_boot_enabled(name) or _unit_active(svc) or _unit_active(sock):
             raise ValueError('CGI units active or boot-enabled: cgi-disable first')
-        print(f'=== CGI remove {name} === (backup + delete only user CGI units)')
+        print(f'=== CGI remove {name} === (temporary recovery copy + delete only user CGI units)')
         if not _commit_args('cgi-remove', name, commit, dry_run, confirm_uid, acct):
             return 0
-        backup = Path(tempfile.mkdtemp(prefix=f'envs-cgi-v20-2-remove-{name}-', dir='/root'))
-        os.chmod(backup, 0o700)
+        backup = _new_recovery_backup(f'envs-cgi-v20-2-remove-{name}-')
         for path in (svc_file, sock_file):
             _atomic_new_file(backup / path.name, _strict_file(path, allowed_modes=(0o644,)), mode=0o600)
         try:
@@ -3037,7 +3093,8 @@ def cgi_remove(name: str, commit: bool, dry_run: bool, confirm_uid: int | None) 
                     _atomic_new_file(path, (backup / path.name).read_bytes())
             _systemctl('daemon-reload')
             raise
-        print(f'REMOVED CGI unit files. Backup: {backup}. User files untouched.')
+        _discard_successful_backup(backup)
+        print('REMOVED CGI unit files. Temporary recovery copy removed. User files untouched.')
         return 0
 
 
@@ -3071,6 +3128,9 @@ def main() -> int:
         p.add_argument('--confirm-uid', type=int)
         if action in ('enable', 'route'):
             p.add_argument('--confirm-reviewed', action='store_true')
+        if action in ('disable', 'remove'):
+            p.add_argument('--retire-user', action='store_true',
+                           help='account deletion only: permit requests in draining nginx workers to be interrupted')
     for action in ('cgi-stage', 'cgi-enable', 'cgi-route', 'cgi-unroute', 'cgi-disable', 'cgi-remove'):
         p = sub.add_parser(action, help='CGI preview by default; --commit to modify')
         p.add_argument('username')
@@ -3082,6 +3142,9 @@ def main() -> int:
             p.add_argument('--confirm-reviewed', action='store_true')
         if action == 'cgi-unroute':
             p.add_argument('--confirm-legacy-fallback', action='store_true')
+        if action in ('cgi-disable', 'cgi-remove'):
+            p.add_argument('--retire-user', action='store_true',
+                           help='account deletion only: permit requests in draining nginx workers to be interrupted')
     w = sub.add_parser('cgi-workers', help='stage CGI worker count 1..4; NEVER restarts a service')
     w.add_argument('username')
     w.add_argument('--workers', type=int, choices=range(1, 5), required=True)
@@ -3091,6 +3154,8 @@ def main() -> int:
     w.add_argument('--confirm-uid', type=int)
     args = ap.parse_args()
     try:
+        if getattr(args, 'retire_user', False) and (not args.commit or args.confirm_uid is None):
+            raise ValueError('--retire-user requires --commit and --confirm-uid')
         if args.action == 'plan': return isolation_plan(args.username)
         if args.action in ('cgi-audit', 'cgi-check'): return cgi_audit(args.username, strict=args.action == 'cgi-check')
         if args.action == 'cgi-status': return cgi_status(args.username)
@@ -3102,8 +3167,10 @@ def main() -> int:
         if args.action == 'cgi-enable': return cgi_enable(args.username, args.commit, args.dry_run, args.confirm_uid, args.confirm_reviewed)
         if args.action == 'cgi-route': return cgi_route(args.username, args.commit, args.dry_run, args.confirm_uid, args.confirm_reviewed, True)
         if args.action == 'cgi-unroute': return cgi_route(args.username, args.commit, args.dry_run, args.confirm_uid, args.confirm_legacy_fallback, False)
-        if args.action == 'cgi-disable': return cgi_disable(args.username, args.commit, args.dry_run, args.confirm_uid)
-        if args.action == 'cgi-remove': return cgi_remove(args.username, args.commit, args.dry_run, args.confirm_uid)
+        if args.action == 'cgi-disable': return cgi_disable(args.username, args.commit, args.dry_run, args.confirm_uid,
+                                                              retiring_user=args.retire_user)
+        if args.action == 'cgi-remove': return cgi_remove(args.username, args.commit, args.dry_run, args.confirm_uid,
+                                                            retiring_user=args.retire_user)
         if args.action == 'discover': return discover(args.user, args.summary, args.with_cgi)
         if args.action == 'cgi-inventory': return cgi_inventory(args.user, summary=args.summary,
                                                                 as_json=args.json)
@@ -3122,7 +3189,8 @@ def main() -> int:
                                  confirm_reviewed=args.confirm_reviewed)
         if args.action == 'disable':
             return disable_v20(args.username, commit=args.commit,
-                                   dry_run=args.dry_run, confirm_uid=args.confirm_uid)
+                                   dry_run=args.dry_run, confirm_uid=args.confirm_uid,
+                                   retiring_user=args.retire_user)
         if args.action in ('route', 'unroute'):
             return change_route(args.username, commit=args.commit, dry_run=args.dry_run,
                                 confirm_uid=args.confirm_uid,
@@ -3130,7 +3198,8 @@ def main() -> int:
                                 want_route=args.action == 'route')
         if args.action == 'remove':
             return remove_v20(args.username, commit=args.commit,
-                              dry_run=args.dry_run, confirm_uid=args.confirm_uid)
+                              dry_run=args.dry_run, confirm_uid=args.confirm_uid,
+                              retiring_user=args.retire_user)
     except (ValueError, OSError, KeyError) as exc:
         print(f'ERROR: {exc}', file=sys.stderr)
         return 2
@@ -3138,5 +3207,3 @@ def main() -> int:
 
 if __name__ == '__main__':
     sys.exit(main())
-
-
